@@ -41,3 +41,6 @@ __pycache__/
 
 # === Tasks (session-specific) ===
 tasks/
+
+# === Dev-only scripts (not needed by end users) ===
+scripts/
