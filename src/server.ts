@@ -7,7 +7,7 @@ import { registerValidatePresetsTool } from "./tools/validate-presets.js";
 import { registerCheckLawUpdatesTool } from "./tools/check-law-updates.js";
 
 const SERVER_NAME = "building-law-mcp";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタントです。
 
