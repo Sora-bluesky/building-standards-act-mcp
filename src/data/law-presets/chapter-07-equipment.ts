@@ -9,6 +9,7 @@ export const CHAPTER_07_EQUIPMENT: LawPreset[] = [
     abbrev: ["浄化槽法"],
     group: "7章 設備関連規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "335AC0000000139",
@@ -17,6 +18,7 @@ export const CHAPTER_07_EQUIPMENT: LawPreset[] = [
     abbrev: ["電気工事士法"],
     group: "7章 設備関連規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "336AC0000000234",
@@ -25,6 +27,7 @@ export const CHAPTER_07_EQUIPMENT: LawPreset[] = [
     abbrev: ["電安法"],
     group: "7章 設備関連規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "413CO0000000310",
@@ -33,6 +36,7 @@ export const CHAPTER_07_EQUIPMENT: LawPreset[] = [
     abbrev: ["浄化槽法施行令"],
     group: "7章 設備関連規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "359M50000100017",
@@ -41,5 +45,6 @@ export const CHAPTER_07_EQUIPMENT: LawPreset[] = [
     abbrev: ["浄化槽法施行規則"],
     group: "7章 設備関連規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

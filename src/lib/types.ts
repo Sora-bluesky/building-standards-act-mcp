@@ -72,6 +72,7 @@ export interface LawPreset {
   abbrev: string[];
   group: string;
   tier: "Act" | "CabinetOrder" | "MinisterialOrdinance" | "Other";
+  verified_at: string; // ISO date string, e.g. "2026-03-17"
 }
 
 // Kokuji preset entry

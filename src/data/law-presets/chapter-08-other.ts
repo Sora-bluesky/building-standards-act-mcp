@@ -9,6 +9,7 @@ export const CHAPTER_08_OTHER: LawPreset[] = [
     abbrev: ["住宅瑕疵担保履行法"],
     group: "8章 その他",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "416AC0000000123",
@@ -17,6 +18,7 @@ export const CHAPTER_08_OTHER: LawPreset[] = [
     abbrev: ["不登法"],
     group: "8章 その他",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "403AC0000000090",
@@ -25,6 +27,7 @@ export const CHAPTER_08_OTHER: LawPreset[] = [
     abbrev: ["借地借家法"],
     group: "8章 その他",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "338AC0000000152",
@@ -33,6 +36,7 @@ export const CHAPTER_08_OTHER: LawPreset[] = [
     abbrev: ["不動産鑑定法"],
     group: "8章 その他",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "429AC0000000065",
@@ -41,5 +45,6 @@ export const CHAPTER_08_OTHER: LawPreset[] = [
     abbrev: ["民泊新法"],
     group: "8章 その他",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
 ];

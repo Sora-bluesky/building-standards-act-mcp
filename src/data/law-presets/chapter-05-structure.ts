@@ -9,6 +9,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["地震防災特措法"],
     group: "5章 構造規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "423AC0000000123",
@@ -17,6 +18,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["津波防災法"],
     group: "5章 構造規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "415AC0000000077",
@@ -25,6 +27,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["特定都市河川法"],
     group: "5章 構造規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "335AC0000000084",
@@ -33,6 +36,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["住宅地区改良法"],
     group: "5章 構造規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "345AC1000000020",
@@ -41,6 +45,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["建築物衛生法", "ビル管法"],
     group: "5章 構造規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "407CO0000000429",
@@ -49,6 +54,7 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["耐震改修促進法施行令"],
     group: "5章 構造規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "407M50004000028",
@@ -57,5 +63,6 @@ export const CHAPTER_05_STRUCTURE: LawPreset[] = [
     abbrev: ["耐震改修促進法施行規則"],
     group: "5章 構造規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

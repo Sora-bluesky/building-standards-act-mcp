@@ -9,6 +9,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["建築物省エネ法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "428CO0000000008",
@@ -17,6 +18,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["建築物省エネ法施行令"],
     group: "10章 省エネ法・住宅関連法",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "354AC0000000049",
@@ -25,6 +27,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["省エネ法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "411AC0000000081",
@@ -33,6 +36,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["品確法", "住宅品質確保法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "420AC0000000087",
@@ -41,6 +45,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["長期優良住宅法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "412AC1000000149",
@@ -49,6 +54,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["マンション管理適正化法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "414AC0000000078",
@@ -57,6 +63,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["マンション建替え法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "337AC0000000069",
@@ -65,6 +72,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["区分所有法"],
     group: "10章 省エネ法・住宅関連法",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "412CO0000000064",
@@ -73,6 +81,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["品確法施行令"],
     group: "10章 省エネ法・住宅関連法",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "421CO0000000024",
@@ -81,6 +90,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["長期優良住宅法施行令"],
     group: "10章 省エネ法・住宅関連法",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "412M50004000020",
@@ -89,6 +99,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["品確法施行規則"],
     group: "10章 省エネ法・住宅関連法",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "421M60000800003",
@@ -97,6 +108,7 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["長期優良住宅法施行規則"],
     group: "10章 省エネ法・住宅関連法",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "428M60000800005",
@@ -105,5 +117,6 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     abbrev: ["建築物省エネ法施行規則"],
     group: "10章 省エネ法・住宅関連法",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

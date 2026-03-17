@@ -9,6 +9,7 @@ export const CHAPTER_11_EXISTING: LawPreset[] = [
     abbrev: ["耐震改修促進法"],
     group: "11章 既存建築物関連",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "407AC0000000014",
@@ -17,6 +18,7 @@ export const CHAPTER_11_EXISTING: LawPreset[] = [
     abbrev: ["被災市街地復興法"],
     group: "11章 既存建築物関連",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "407AC0000000043",
@@ -25,5 +27,6 @@ export const CHAPTER_11_EXISTING: LawPreset[] = [
     abbrev: ["被災マンション法"],
     group: "11章 既存建築物関連",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
 ];

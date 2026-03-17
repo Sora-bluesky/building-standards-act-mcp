@@ -105,4 +105,50 @@ describe("LawRegistry", () => {
       expect(second.length).toBe(originalLength);
     });
   });
+
+  describe("expanded presets", () => {
+    it("contains at least 100 presets", () => {
+      const all = registry.getAll();
+      expect(all.length).toBeGreaterThanOrEqual(100);
+    });
+
+    it("has no duplicate law_ids", () => {
+      const all = registry.getAll();
+      const ids = all.map((p) => p.law_id);
+      const unique = new Set(ids);
+      expect(unique.size).toBe(ids.length);
+    });
+
+    it("covers all 11 chapters", () => {
+      for (let ch = 1; ch <= 11; ch++) {
+        const results = registry.getByGroup(`${ch}章`);
+        expect(results.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("has balanced tier distribution", () => {
+      const all = registry.getAll();
+      const cabinet = all.filter((p) => p.tier === "CabinetOrder");
+      const ministerial = all.filter((p) => p.tier === "MinisterialOrdinance");
+      expect(cabinet.length).toBeGreaterThanOrEqual(10);
+      expect(ministerial.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("all presets have verified_at set", () => {
+      const all = registry.getAll();
+      for (const preset of all) {
+        expect(preset.verified_at).toBeDefined();
+        expect(preset.verified_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+    });
+
+    it("finds newly added laws by name", () => {
+      // Chapter 5
+      expect(registry.findByName("地震防災特措法")).toBeDefined();
+      // Chapter 6
+      expect(registry.findByName("JIS法")).toBeDefined();
+      // Chapter 8
+      expect(registry.findByName("民泊新法")).toBeDefined();
+    });
+  });
 });

@@ -9,6 +9,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["都計法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "344CO0000000158",
@@ -17,6 +18,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["都計令"],
     group: "3章 集団規定・街づくり規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "344AC0000000038",
@@ -25,6 +27,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["再開発法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "416AC0000000110",
@@ -33,6 +36,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["景観法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "409AC0000000049",
@@ -41,6 +45,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["密集法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "424AC0000000084",
@@ -49,6 +54,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["低炭素法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "324AC0000000189",
@@ -57,6 +63,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["屋外広告物法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "325AC0100000214",
@@ -65,6 +72,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["文化財保護法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "329AC0000000119",
@@ -73,6 +81,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["区画整理法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "348AC0000000072",
@@ -81,6 +90,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["都市緑地法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "349AC0000000068",
@@ -89,6 +99,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["生産緑地法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "349AC1000000092",
@@ -97,6 +108,7 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["国土利用計画法", "国土法"],
     group: "3章 集団規定・街づくり規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "344M50004000049",
@@ -105,5 +117,6 @@ export const CHAPTER_03_COLLECTIVE: LawPreset[] = [
     abbrev: ["都計規則"],
     group: "3章 集団規定・街づくり規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

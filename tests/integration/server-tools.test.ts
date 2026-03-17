@@ -408,7 +408,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 4 tools", async () => {
+    it("listTools returns all 5 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -417,6 +417,7 @@ describe("Integration: MCP Server Tools", () => {
         "get_kokuji",
         "get_law",
         "search_law",
+        "validate_presets",
       ]);
     });
 

@@ -9,6 +9,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["旅館業法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "322AC0000000233",
@@ -17,6 +18,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["食品衛生法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "323AC0000000122",
@@ -25,6 +27,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["風営法", "風適法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "323AC0000000137",
@@ -33,6 +36,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["興行場法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "323AC0000000139",
@@ -41,6 +45,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["公衆浴場法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "323AC0000000205",
@@ -49,6 +54,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["医療法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "322AC0000000164",
@@ -57,6 +63,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["児童福祉法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "326AC0000000045",
@@ -65,6 +72,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["社会福祉法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "338AC0000000133",
@@ -73,6 +81,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["老人福祉法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "322AC0000000026",
@@ -81,6 +90,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["学校教育法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "332AC0000000106",
@@ -89,6 +99,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["駐車場法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "325AC0000000149",
@@ -97,6 +108,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["火薬類取締法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "326AC0000000204",
@@ -105,6 +117,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["高圧ガス保安法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "342AC0000000149",
@@ -113,6 +126,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["液石法", "LPガス法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "329AC0000000051",
@@ -121,6 +135,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["ガス事業法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "339AC0000000170",
@@ -129,6 +144,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["電気事業法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "336AC0000000191",
@@ -137,6 +153,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["盛土規制法", "宅造法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "327AC1000000176",
@@ -145,6 +162,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["宅建業法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "327AC1000000180",
@@ -153,6 +171,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["道路法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "326AC0100000219",
@@ -161,6 +180,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["土地収用法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "327AC0000000229",
@@ -169,6 +189,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["農地法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "326AC1000000249",
@@ -177,6 +198,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["森林法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "339AC0000000167",
@@ -185,6 +207,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["河川法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "325AC0000000218",
@@ -193,6 +216,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["港湾法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "333AC0000000030",
@@ -201,6 +225,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["地すべり防止法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "344AC0000000057",
@@ -209,6 +234,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["急傾斜地法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "412AC0000000057",
@@ -217,6 +243,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["土砂災害防止法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "334CO0000000306",
@@ -225,6 +252,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["危険物政令"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "332AC0000000177",
@@ -233,6 +261,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["水道法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "333AC0000000079",
@@ -241,6 +270,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["下水道法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "345AC0000000137",
@@ -249,6 +279,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["廃棄物処理法", "廃掃法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "414AC0000000053",
@@ -257,6 +288,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["土壌汚染対策法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "347AC0000000057",
@@ -265,6 +297,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["安衛法", "労安法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "412AC0000000104",
@@ -273,6 +306,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["建設リサイクル法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "343AC0000000097",
@@ -281,6 +315,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["大気汚染防止法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "345AC0000000138",
@@ -289,6 +324,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["水質汚濁防止法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "343AC0000000098",
@@ -297,6 +333,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["騒音規制法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "351AC0000000064",
@@ -305,6 +342,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["振動規制法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "346AC0000000091",
@@ -313,6 +351,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["悪臭防止法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "418AC0000000091",
@@ -321,6 +360,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["バリアフリー法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "418CO0000000379",
@@ -329,6 +369,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["バリアフリー法施行令"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "335AC0000000105",
@@ -337,6 +378,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["道交法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "331AC0000000079",
@@ -345,6 +387,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["都市公園法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "332AC0000000161",
@@ -353,6 +396,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["自然公園法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "341AC1000000001",
@@ -361,6 +405,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["古都保存法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "426AC1000000127",
@@ -369,6 +414,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["空家対策特措法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "409AC0000000123",
@@ -377,6 +423,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["介護保険法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "417AC0000000123",
@@ -385,6 +432,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["障害者総合支援法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "323AC0000000048",
@@ -393,6 +441,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["墓地埋葬法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "413AC0000000026",
@@ -401,6 +450,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["高齢者住まい法"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "347CO0000000318",
@@ -409,6 +459,7 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["安衛令"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "337CO0000000016",
@@ -417,5 +468,6 @@ export const CHAPTER_09_RELATED: LawPreset[] = [
     abbrev: ["盛土規制法施行令"],
     group: "9章 建築基準関係規定・建築関連法令",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
 ];

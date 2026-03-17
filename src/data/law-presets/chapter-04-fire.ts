@@ -9,6 +9,7 @@ export const CHAPTER_04_FIRE: LawPreset[] = [
     abbrev: ["消防法"],
     group: "4章 防火規定・耐火規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "336CO0000000037",
@@ -17,6 +18,7 @@ export const CHAPTER_04_FIRE: LawPreset[] = [
     abbrev: ["消防令"],
     group: "4章 防火規定・耐火規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "336M50000008006",
@@ -25,6 +27,7 @@ export const CHAPTER_04_FIRE: LawPreset[] = [
     abbrev: ["消防規則"],
     group: "4章 防火規定・耐火規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "334M50000002055",
@@ -33,5 +36,6 @@ export const CHAPTER_04_FIRE: LawPreset[] = [
     abbrev: ["危険物規則"],
     group: "4章 防火規定・耐火規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

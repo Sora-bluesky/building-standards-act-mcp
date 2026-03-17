@@ -9,6 +9,7 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["士法"],
     group: "2章 手続関連規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "325CO0000000201",
@@ -17,6 +18,7 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["士法施行令"],
     group: "2章 手続関連規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "325M50004000038",
@@ -25,6 +27,7 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["士法施行規則"],
     group: "2章 手続関連規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "324AC0000000100",
@@ -33,6 +36,7 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["建設業法"],
     group: "2章 手続関連規定",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "331CO0000000273",
@@ -41,6 +45,7 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["建設業法施行令"],
     group: "2章 手続関連規定",
     tier: "CabinetOrder",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "324M50004000014",
@@ -49,5 +54,6 @@ export const CHAPTER_02_PROCEDURES: LawPreset[] = [
     abbrev: ["建設業法施行規則"],
     group: "2章 手続関連規定",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];

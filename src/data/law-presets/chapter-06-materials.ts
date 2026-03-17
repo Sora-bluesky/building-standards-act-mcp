@@ -9,6 +9,7 @@ export const CHAPTER_06_MATERIALS: LawPreset[] = [
     abbrev: ["JIS法", "産業標準化法"],
     group: "6章 建築材料",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "406AC0000000085",
@@ -17,6 +18,7 @@ export const CHAPTER_06_MATERIALS: LawPreset[] = [
     abbrev: ["PL法", "製造物責任法"],
     group: "6章 建築材料",
     tier: "Act",
+    verified_at: "2026-03-17",
   },
   {
     law_id: "417M60000100021",
@@ -25,5 +27,6 @@ export const CHAPTER_06_MATERIALS: LawPreset[] = [
     abbrev: ["石綿則", "アスベスト規則"],
     group: "6章 建築材料",
     tier: "MinisterialOrdinance",
+    verified_at: "2026-03-17",
   },
 ];
