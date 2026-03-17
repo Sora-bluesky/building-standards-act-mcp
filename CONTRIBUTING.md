@@ -50,6 +50,49 @@ npm test
 3. `scripts/verified-law-ids.json` に law_id を追加
 4. テストを追加して `npm test` で確認
 
+## ブランチ戦略
+
+`main` ブランチを唯一の安定ブランチとして運用します。
+
+### フロー
+
+```
+1. main から feature ブランチを作成
+   git checkout -b feat/my-feature
+
+2. 変更をコミット
+   git add <files>
+   git commit -m "feat: add my feature"
+
+3. push して PR を作成
+   git push -u origin feat/my-feature
+   gh pr create
+
+4. CI が自動実行（build → lint → test → MCP protocol test）
+
+5. CI パス後にマージ → feature ブランチ自動削除
+```
+
+### ブランチ命名規則
+
+| プレフィックス | 用途             |
+| -------------- | ---------------- |
+| `feat/`        | 新機能           |
+| `fix/`         | バグ修正         |
+| `docs/`        | ドキュメント     |
+| `chore/`       | ビルド・設定変更 |
+| `refactor/`    | リファクタリング |
+
+### CI チェック
+
+PR に対して以下が自動実行されます:
+
+- **lint**: TypeScript 型チェック（`tsc --noEmit`）
+- **build**: TypeScript ビルド
+- **test**: vitest による全テスト実行
+- **MCP protocol test**: サーバー起動 + JSON-RPC 応答確認
+- **マトリクス**: macOS + Ubuntu, Node.js 18/20/22（6 ジョブ）
+
 ## Pull Request
 
 1. feature ブランチを作成してください
