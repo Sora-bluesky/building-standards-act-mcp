@@ -33,6 +33,7 @@ Thumbs.db
 # === Claude Code / tobari ===
 .claude/
 CLAUDE.md
+HANDOFF.md
 
 # === Python ===
 __pycache__/
