@@ -56,12 +56,30 @@ export interface LawNode {
   children?: Array<LawNode | string>;
 }
 
+// Article cross-reference types
+export type ReferenceType =
+  | "same_law"
+  | "cross_law"
+  | "relative"
+  | "delegation"
+  | "unknown";
+
+export interface ArticleReference {
+  raw_text: string;
+  ref_type: ReferenceType;
+  target_law?: string;
+  target_article?: string;
+  target_paragraph?: string;
+  target_item?: string;
+}
+
 // Parsed article output (plain text)
 export interface ParsedArticle {
   article_num: string;
   article_caption: string;
   article_title: string;
   text: string;
+  references?: ArticleReference[];
 }
 
 // Structured article output (hierarchical JSON)
@@ -90,6 +108,7 @@ export interface StructuredArticle {
   article_caption: string;
   article_title: string;
   paragraphs: StructuredParagraph[];
+  references?: ArticleReference[];
 }
 
 // Law preset entry

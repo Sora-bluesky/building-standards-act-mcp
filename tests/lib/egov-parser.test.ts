@@ -275,6 +275,24 @@ describe("egov-parser", () => {
       const result = parseArticle(TEST_LAW_TREE, "999");
       expect(result).toBeNull();
     });
+
+    it("includes references when present (article 3 has relative and delegation refs)", () => {
+      const result = parseArticle(TEST_LAW_TREE, "3");
+      expect(result).not.toBeNull();
+      expect(result!.references).toBeDefined();
+      expect(result!.references!.length).toBeGreaterThan(0);
+      const relRefs = result!.references!.filter(
+        (r) => r.ref_type === "relative",
+      );
+      expect(relRefs.length).toBeGreaterThanOrEqual(1);
+      expect(relRefs.some((r) => r.raw_text === "前項")).toBe(true);
+    });
+
+    it("omits references field when no references found (article 1)", () => {
+      const result = parseArticle(TEST_LAW_TREE, "1");
+      expect(result).not.toBeNull();
+      expect(result!.references).toBeUndefined();
+    });
   });
 
   describe("parseAllArticles", () => {
@@ -393,6 +411,21 @@ describe("egov-parser", () => {
       expect(result).not.toBeNull();
       expect(result!.article_num).toBe("2");
       expect(result!.paragraphs[0].items).toHaveLength(2);
+    });
+
+    it("includes references in structured output", () => {
+      const result = parseArticleStructured(TEST_LAW_TREE, "3");
+      expect(result).not.toBeNull();
+      expect(result!.references).toBeDefined();
+      expect(result!.references!.some((r) => r.ref_type === "relative")).toBe(
+        true,
+      );
+    });
+
+    it("omits references in structured output when none found", () => {
+      const result = parseArticleStructured(TEST_LAW_TREE, "1");
+      expect(result).not.toBeNull();
+      expect(result!.references).toBeUndefined();
     });
   });
 
