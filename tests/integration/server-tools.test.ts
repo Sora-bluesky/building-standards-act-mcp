@@ -428,7 +428,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 7 tools", async () => {
+    it("listTools returns all 8 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -440,6 +440,7 @@ describe("Integration: MCP Server Tools", () => {
         "get_laws_batch",
         "search_law",
         "validate_presets",
+        "verify_citation",
       ]);
     });
 
@@ -1048,6 +1049,75 @@ describe("Integration: MCP Server Tools", () => {
       expect(result.isError).toBe(true);
       const text = getText(result);
       expect(text).toContain("空です");
+    });
+  });
+
+  // ── verify_citation ────────────────────────────
+
+  describe("verify_citation", () => {
+    it("verifies existing article without claimed_text", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "verify_citation",
+        arguments: {
+          citations: [{ law_name: "建築基準法", article_number: "1" }],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("引用検証結果");
+      expect(text).toContain("[OK]");
+      expect(text).toContain("この法律は、建築物の敷地");
+    });
+
+    it("reports law_not_found for unknown law", async () => {
+      const result = await client.callTool({
+        name: "verify_citation",
+        arguments: {
+          citations: [
+            { law_name: "INTEG_存在しない法律", article_number: "1" },
+          ],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("[N/A]");
+      expect(text).toContain("未発見");
+    });
+
+    it("verifies correct claimed_text as match", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "verify_citation",
+        arguments: {
+          citations: [
+            {
+              law_name: "建築基準法",
+              article_number: "1",
+              claimed_text:
+                "建築物の敷地、構造、設備及び用途に関する最低の基準",
+            },
+          ],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("[OK]");
+    });
+
+    it("returns error for empty citations", async () => {
+      const result = await client.callTool({
+        name: "verify_citation",
+        arguments: { citations: [] },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(getText(result)).toContain("空です");
     });
   });
 });
