@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-18
+
+### Added
+
+- `get_laws_batch` tool: batch fetch up to 20 articles in one call
+- `verify_citation` tool: verify law citations in AI responses (hallucination detection)
+- `suggest_related` tool: auto-extract related laws from article cross-references
+- `analyze_article` tool: structural metadata for AI summarization support
+- `citation-verifier.ts`: text normalization + LCS-based match scoring
+- `related-law-finder.ts`: reference categorization (cross_law, delegation, same_law)
+- `article-analyzer.ts`: paragraph/item counting, reference stats, preview generation
+
+### Changed
+
+- MCP tools expanded: 6 → 10
+- Tests expanded: 225 → 294 across 23 test files
+
 ## [0.2.0] - 2026-03-17
 
 ### Added
@@ -41,3 +58,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.2.0
+[0.3.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.3.0

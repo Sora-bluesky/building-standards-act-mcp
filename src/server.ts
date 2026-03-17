@@ -11,7 +11,7 @@ import { registerSuggestRelatedTool } from "./tools/suggest-related.js";
 import { registerAnalyzeArticleTool } from "./tools/analyze-article.js";
 
 const SERVER_NAME = "building-law-mcp";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 
 const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタントです。
 
