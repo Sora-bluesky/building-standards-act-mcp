@@ -3,7 +3,7 @@
 #
 # 対象: ~/.agents/skills/git-guard/hooks/pre-commit, pre-push
 # 変更内容: scan_email_and_phone() 内の電話番号検出で、
-#           e-Gov法令IDパターン ([0-9]{3}[A-Z]{2}[0-9]{7,10}) を含む行をスキップ
+#           e-Gov法令IDパターン ([0-9]{3}[A-Z]{1,2}[0-9]{7,13}) を含む行をスキップ
 
 set -e
 
@@ -46,7 +46,7 @@ patch_file() {
                 # Skip e-Gov law IDs (e.g., 325AC0000000201) — not phone numbers\
                 local source_line\
                 source_line=$(echo "$content" | sed -n "${line_num}p")\
-                if echo "$source_line" | grep -qE '"'"'[0-9]{3}[A-Z]{2}[0-9]{7,10}'"'"'; then\
+                if echo "$source_line" | grep -qE '"'"'[0-9]{3}[A-Z]{1,2}[0-9]{7,13}'"'"'; then\
                     continue\
                 fi' "$file"
 
