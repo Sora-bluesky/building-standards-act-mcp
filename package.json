@@ -15,7 +15,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tasks:sync": "node .claude/hooks/roadmap-sync.js sync"
   },
   "keywords": [
     "mcp",
