@@ -1,5 +1,10 @@
 # building-law-mcp
 
+[![npm version](https://img.shields.io/npm/v/building-standards-act-mcp)](https://www.npmjs.com/package/building-standards-act-mcp)
+[![CI](https://github.com/Sora-bluesky/building-standards-act-mcp/actions/workflows/cross-platform-test.yml/badge.svg)](https://github.com/Sora-bluesky/building-standards-act-mcp/actions/workflows/cross-platform-test.yml)
+[![Node.js](https://img.shields.io/node/v/building-standards-act-mcp)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 建築確認申請に必要な法令・告示を e-Gov 法令 API からリアルタイム取得する MCP サーバー。
 
 AI の建築法規回答に含まれるハルシネーションを、条文原文との照合によって防ぐ。
