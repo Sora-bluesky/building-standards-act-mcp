@@ -1,11 +1,11 @@
 {
-  "name": "building-law-mcp",
+  "name": "building-standards-act-mcp",
   "version": "0.1.0",
   "description": "MCP server for Japanese building regulations — fetches law text from e-Gov API v2 to prevent AI hallucination in building permit reviews",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "building-law-mcp": "dist/index.js"
+    "building-standards-act-mcp": "dist/index.js"
   },
   "files": [
     "dist"
