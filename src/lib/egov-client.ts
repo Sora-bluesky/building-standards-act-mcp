@@ -1,14 +1,22 @@
 import { TTLCache } from "./cache.js";
 import { EgovApiError } from "./errors.js";
-import type { EgovLawSearchResponse, EgovLawDataResponse } from "./types.js";
+import type {
+  EgovLawSearchResponse,
+  EgovLawDataResponse,
+  EgovLawRevisionsResponse,
+} from "./types.js";
 
 const BASE_URL = "https://laws.e-gov.go.jp/api/2";
 const SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const LAW_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const REVISIONS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
 const searchCache = new TTLCache<EgovLawSearchResponse>(SEARCH_CACHE_TTL);
 const lawDataCache = new TTLCache<EgovLawDataResponse>(LAW_DATA_CACHE_TTL);
+const revisionsCache = new TTLCache<EgovLawRevisionsResponse>(
+  REVISIONS_CACHE_TTL,
+);
 
 async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController();
@@ -83,5 +91,25 @@ export async function getLawData(lawId: string): Promise<EgovLawDataResponse> {
   const result = await fetchJson<EgovLawDataResponse>(url);
 
   lawDataCache.set(cacheKey, result);
+  return result;
+}
+
+/**
+ * Get revision history for a law by lawId.
+ * Uses GET /api/2/law_revisions/{lawId}
+ */
+export async function getLawRevisions(
+  lawId: string,
+): Promise<EgovLawRevisionsResponse> {
+  const cacheKey = `revisions:${lawId}`;
+  const cached = revisionsCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const url = `${BASE_URL}/law_revisions/${encodeURIComponent(lawId)}`;
+  const result = await fetchJson<EgovLawRevisionsResponse>(url);
+
+  revisionsCache.set(cacheKey, result);
   return result;
 }

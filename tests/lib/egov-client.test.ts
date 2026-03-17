@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { searchLaws, getLawData } from "../../src/lib/egov-client.js";
+import {
+  searchLaws,
+  getLawData,
+  getLawRevisions,
+} from "../../src/lib/egov-client.js";
 import { EgovApiError } from "../../src/lib/errors.js";
 
 const mockFetch = vi.fn();
@@ -158,6 +162,51 @@ describe("egov-client", () => {
 
       const first = await getLawData("CACHE_TEST_ID");
       const second = await getLawData("CACHE_TEST_ID");
+
+      expect(first).toEqual(mockResponse);
+      expect(second).toEqual(mockResponse);
+      expect(mockFetch).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("getLawRevisions", () => {
+    it("returns parsed JSON response for a law ID", async () => {
+      const mockResponse = {
+        law_info: { law_id: "REVISIONS_HAPPY_PATH" },
+        revisions: [
+          {
+            law_revision_id: "rev1",
+            amendment_promulgate_date: "2025-06-01",
+            amendment_enforcement_date: "2025-10-01",
+          },
+        ],
+      };
+
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      const result = await getLawRevisions("REVISIONS_HAPPY_PATH");
+
+      expect(result).toEqual(mockResponse);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("law_revisions/REVISIONS_HAPPY_PATH"),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          headers: { Accept: "application/json" },
+        }),
+      );
+    });
+
+    it("returns cached result on second call with same law ID", async () => {
+      const mockResponse = {
+        law_info: { law_id: "REVISIONS_CACHE_TEST" },
+        revisions: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      const first = await getLawRevisions("REVISIONS_CACHE_TEST");
+      const second = await getLawRevisions("REVISIONS_CACHE_TEST");
 
       expect(first).toEqual(mockResponse);
       expect(second).toEqual(mockResponse);
