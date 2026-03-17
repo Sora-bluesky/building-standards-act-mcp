@@ -522,6 +522,53 @@ describe("Integration: MCP Server Tools", () => {
       const text = getText(result);
       expect(text).toContain("エラー");
     });
+
+    it("returns structured JSON when format=structured", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "get_law",
+        arguments: {
+          law_name: "建築基準法",
+          article_number: "第20条",
+          format: "structured",
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      const parsed = JSON.parse(text);
+      expect(parsed.law_title).toBe("建築基準法");
+      expect(parsed.law_num).toBe("昭和二十五年法律第二百一号");
+      expect(parsed.source).toBe("e-Gov法令検索");
+      expect(parsed.article.article_num).toBe("20");
+      expect(parsed.article.article_title).toBe("第二十条");
+      expect(parsed.article.article_caption).toBe("（構造耐力）");
+      expect(parsed.article.paragraphs).toHaveLength(1);
+      expect(parsed.article.paragraphs[0].paragraph_num).toBe("1");
+      expect(parsed.article.paragraphs[0].items).toHaveLength(1);
+      expect(parsed.article.paragraphs[0].items[0].item_title).toBe("一");
+    });
+
+    it("returns text format when format=text explicitly", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "get_law",
+        arguments: {
+          law_name: "建築基準法",
+          article_number: "第1条",
+          format: "text",
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("【建築基準法】第一条");
+      expect(text).toContain("この法律は、建築物の敷地");
+      // Should NOT be JSON
+      expect(() => JSON.parse(text)).toThrow();
+    });
   });
 
   // ── get_full_law ────────────────────────────────

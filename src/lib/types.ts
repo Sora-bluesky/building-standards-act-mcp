@@ -56,12 +56,40 @@ export interface LawNode {
   children?: Array<LawNode | string>;
 }
 
-// Parsed article output
+// Parsed article output (plain text)
 export interface ParsedArticle {
   article_num: string;
   article_caption: string;
   article_title: string;
   text: string;
+}
+
+// Structured article output (hierarchical JSON)
+export interface StructuredSubitem {
+  subitem_num: string;
+  subitem_title: string;
+  subitem_sentence: string;
+  subitems: StructuredSubitem[];
+}
+
+export interface StructuredItem {
+  item_num: string;
+  item_title: string;
+  item_sentence: string;
+  subitems: StructuredSubitem[];
+}
+
+export interface StructuredParagraph {
+  paragraph_num: string;
+  paragraph_sentence: string;
+  items: StructuredItem[];
+}
+
+export interface StructuredArticle {
+  article_num: string;
+  article_caption: string;
+  article_title: string;
+  paragraphs: StructuredParagraph[];
 }
 
 // Law preset entry
