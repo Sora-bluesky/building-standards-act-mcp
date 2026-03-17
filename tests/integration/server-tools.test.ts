@@ -680,21 +680,67 @@ describe("Integration: MCP Server Tools", () => {
   // ── get_kokuji ──────────────────────────────────
 
   describe("get_kokuji", () => {
-    it("returns text when API search finds a result", async () => {
+    it("returns preset kokuji failure message when MLIT pipeline fails", async () => {
+      // "耐火構造の構造方法を定める件" matches a preset.
+      // The flow tries MLIT first (fetch notice page → Excel → PDF).
+      // With our mock returning 404 for MLIT URLs, the pipeline fails.
+      // The preset has law_id="" so e-Gov fallback is also skipped.
+      // Result: "告示本文の取得に失敗しました"
       mockFetch.mockImplementation(async (url: string) => {
-        if (url.includes("/laws?law_title=")) {
-          return createMockResponse(KOKUJI_SEARCH_RESULT);
+        if (typeof url !== "string") {
+          throw new Error(`Unexpected fetch input: ${url}`);
         }
-        if (url.includes("/law_data/KOKUJI_INTEG_001")) {
-          return createMockResponse(KOKUJI_LAW_DATA);
+
+        // MLIT URLs return 404 so the pipeline fails gracefully
+        if (url.includes("mlit.go.jp")) {
+          return createMockResponse("Not Found", 404, "Not Found");
         }
+
         throw new Error(`Unexpected fetch URL: ${url}`);
       });
 
       const result = await client.callTool({
         name: "get_kokuji",
         arguments: {
-          kokuji_name: "INTEG_耐火構造の構造方法を定める件",
+          kokuji_name: "耐火構造の構造方法を定める件",
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("【告示】耐火構造の構造方法を定める件");
+      expect(text).toContain("告示本文の取得に失敗しました");
+    });
+
+    it("returns e-Gov search result for non-preset kokuji", async () => {
+      // Use a name that does NOT match any preset → no preset found.
+      // Flow: no preset → MLIT search (fails) → e-Gov API → return result.
+      mockFetch.mockImplementation(async (url: string) => {
+        if (typeof url !== "string") {
+          throw new Error(`Unexpected fetch input: ${url}`);
+        }
+
+        // MLIT URLs return 404
+        if (url.includes("mlit.go.jp")) {
+          return createMockResponse("Not Found", 404, "Not Found");
+        }
+
+        // e-Gov search
+        if (url.includes("/laws?law_title=")) {
+          return createMockResponse(KOKUJI_SEARCH_RESULT);
+        }
+        // e-Gov law data
+        if (url.includes("/law_data/KOKUJI_INTEG_001")) {
+          return createMockResponse(KOKUJI_LAW_DATA);
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await client.callTool({
+        name: "get_kokuji",
+        arguments: {
+          kokuji_name: "INTEG_耐震改修に関する告示",
         },
       });
 
@@ -708,6 +754,15 @@ describe("Integration: MCP Server Tools", () => {
 
     it("returns guidance when nothing found", async () => {
       mockFetch.mockImplementation(async (url: string) => {
+        if (typeof url !== "string") {
+          throw new Error(`Unexpected fetch input: ${url}`);
+        }
+
+        // MLIT URLs return 404
+        if (url.includes("mlit.go.jp")) {
+          return createMockResponse("Not Found", 404, "Not Found");
+        }
+
         if (url.includes("/laws?law_title=")) {
           return createMockResponse(EMPTY_SEARCH_RESULT);
         }
@@ -725,8 +780,20 @@ describe("Integration: MCP Server Tools", () => {
       expect(text).toContain("get_law");
     });
 
-    it("returns error on API failure", async () => {
+    it("returns guidance when all sources fail (no isError)", async () => {
+      // With the new flow, errors from MLIT and e-Gov are caught internally.
+      // The result is a "not found" guidance message, not an isError.
       mockFetch.mockImplementation(async (url: string) => {
+        if (typeof url !== "string") {
+          throw new Error(`Unexpected fetch input: ${url}`);
+        }
+
+        // MLIT URLs return 404
+        if (url.includes("mlit.go.jp")) {
+          return createMockResponse("Not Found", 404, "Not Found");
+        }
+
+        // e-Gov search returns 500 — but fetchViaEgov catches it
         if (url.includes("/laws?law_title=")) {
           return createMockResponse(
             { message: "Internal Server Error" },
@@ -734,6 +801,7 @@ describe("Integration: MCP Server Tools", () => {
             "Internal Server Error",
           );
         }
+
         throw new Error(`Unexpected fetch URL: ${url}`);
       });
 
@@ -742,9 +810,11 @@ describe("Integration: MCP Server Tools", () => {
         arguments: { kokuji_name: "INTEG_ERROR_告示テスト" },
       });
 
-      expect(result.isError).toBe(true);
+      // With the new code, errors are caught internally and the result
+      // is a guidance message, not an isError response.
+      expect(result.isError).toBeFalsy();
       const text = getText(result);
-      expect(text).toContain("エラー");
+      expect(text).toContain("該当する告示を確認できませんでした");
     });
   });
 });

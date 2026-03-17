@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
+import { findKokujiPdfUrl } from "../lib/mlit-client.js";
+import { extractTextFromPdf } from "../lib/pdf-extractor.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 
@@ -12,54 +14,147 @@ const schema = {
     .describe("告示名（例: 耐火構造の構造方法を定める件、不燃材料を定める件）"),
 };
 
+/**
+ * Attempt to fetch kokuji text via the MLIT pipeline:
+ * 1. Find the PDF URL from the MLIT Excel notice database
+ * 2. Download the PDF and extract text
+ */
+async function fetchViaMlit(title: string): Promise<string | null> {
+  const pdfUrl = await findKokujiPdfUrl(title);
+  if (!pdfUrl) {
+    return null;
+  }
+
+  try {
+    return await extractTextFromPdf(pdfUrl);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Attempt to fetch kokuji text via the e-Gov API fallback:
+ * Search by title, then fetch the first result.
+ */
+async function fetchViaEgov(
+  name: string,
+): Promise<{ title: string; lawNum: string; text: string } | null> {
+  try {
+    const searchResult = await searchLaws(name);
+    if (searchResult.count === 0) {
+      return null;
+    }
+
+    const firstLaw = searchResult.laws[0];
+    const title =
+      firstLaw.revision_info?.law_title ??
+      firstLaw.current_revision_info?.law_title ??
+      name;
+    const lawId = firstLaw.law_info.law_id;
+
+    const lawData = await getLawData(lawId);
+    const text = parseFullLaw(lawData.law_full_text);
+
+    return { title, lawNum: firstLaw.law_info.law_num, text };
+  } catch {
+    return null;
+  }
+}
+
 export function registerGetKokujiTool(server: McpServer): void {
   server.tool(
     "get_kokuji",
-    "建築基準法が技術基準を委任している告示の全文を取得する。e-Gov APIで検索を試みる。",
+    "建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、見つからない場合はe-Gov APIで検索を試みる。",
     schema,
     async ({ kokuji_name }) => {
       try {
-        // First check preset registry
+        // Step 1: Check preset registry for known kokuji
         const preset = registry.findByName(kokuji_name);
 
         if (preset) {
-          // If we have a preset with a law_id, fetch from API
-          const lawData = await getLawData(preset.law_id);
-          const fullText = parseFullLaw(lawData.law_full_text);
+          // Step 2a: Try MLIT pipeline (Excel → PDF → text)
+          const mlitText = await fetchViaMlit(preset.title);
 
+          if (mlitText) {
+            const text = [
+              `【告示】${preset.title}`,
+              `法令番号: ${preset.law_num}`,
+              `委任元: ${preset.delegated_by}`,
+              "",
+              mlitText,
+              "",
+              "出典: 国土交通省 告示・通達データベース",
+              "",
+              "※ 掲載情報の正確性については万全を期しておりますが、",
+              "本データの利用に伴って発生した不利益や問題について責任を負うものではありません。",
+              "正確な条文は官報または法令集で確認してください。",
+            ].join("\n");
+
+            return { content: [{ type: "text" as const, text }] };
+          }
+
+          // Step 2b: MLIT failed — try e-Gov API if law_id exists
+          if (preset.law_id) {
+            try {
+              const lawData = await getLawData(preset.law_id);
+              const fullText = parseFullLaw(lawData.law_full_text);
+
+              const text = [
+                `【告示】${preset.title}`,
+                `法令番号: ${preset.law_num}`,
+                `委任元: ${preset.delegated_by}`,
+                "",
+                fullText,
+                "",
+                "出典: e-Gov法令検索",
+              ].join("\n");
+
+              return { content: [{ type: "text" as const, text }] };
+            } catch {
+              // e-Gov also failed — fall through to "not found" message
+            }
+          }
+
+          // Preset found but no text available from any source
           const text = [
             `【告示】${preset.title}`,
             `法令番号: ${preset.law_num}`,
             `委任元: ${preset.delegated_by}`,
             "",
-            fullText,
-            "",
-            "出典: e-Gov法令検索",
+            "告示本文の取得に失敗しました。",
+            "国土交通省の告示データベース（PDF）および e-Gov 法令検索の",
+            "いずれからも取得できませんでした。",
+            "ネットワーク接続を確認するか、時間をおいて再度お試しください。",
           ].join("\n");
 
           return { content: [{ type: "text" as const, text }] };
         }
 
-        // No preset found - try searching e-Gov API directly
-        const searchResult = await searchLaws(kokuji_name);
-
-        if (searchResult.count > 0) {
-          // Found something - try to get the first result
-          const firstLaw = searchResult.laws[0];
-          const title =
-            firstLaw.revision_info?.law_title ??
-            firstLaw.current_revision_info?.law_title ??
-            kokuji_name;
-          const lawId = firstLaw.law_info.law_id;
-
-          const lawData = await getLawData(lawId);
-          const fullText = parseFullLaw(lawData.law_full_text);
-
+        // Step 3: No preset — try MLIT search directly
+        const mlitText = await fetchViaMlit(kokuji_name);
+        if (mlitText) {
           const text = [
-            `【検索結果】${title}`,
-            `法令番号: ${firstLaw.law_info.law_num}`,
+            `【検索結果】${kokuji_name}`,
             "",
-            fullText,
+            mlitText,
+            "",
+            "出典: 国土交通省 告示・通達データベース",
+            "",
+            "※ この告示はプリセットに含まれていないため、",
+            "国土交通省の告示データベースから検索して取得しました。",
+          ].join("\n");
+
+          return { content: [{ type: "text" as const, text }] };
+        }
+
+        // Step 4: MLIT not found — try e-Gov API as final fallback
+        const egovResult = await fetchViaEgov(kokuji_name);
+        if (egovResult) {
+          const text = [
+            `【検索結果】${egovResult.title}`,
+            `法令番号: ${egovResult.lawNum}`,
+            "",
+            egovResult.text,
             "",
             "出典: e-Gov法令検索",
             "",
@@ -69,7 +164,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           return { content: [{ type: "text" as const, text }] };
         }
 
-        // Nothing found
+        // Nothing found anywhere
         const allKokuji = registry.getAll();
         const text = [
           `該当する告示を確認できませんでした: ${kokuji_name}`,
@@ -79,9 +174,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "該当条文を get_law ツールで確認してください。",
           "",
           "登録済みの告示一覧:",
-          ...(allKokuji.length > 0
-            ? allKokuji.map((k) => `  - ${k.title}`)
-            : ["  （現在登録されている告示はありません）"]),
+          ...allKokuji.map((k) => `  - ${k.title}`),
         ].join("\n");
 
         return { content: [{ type: "text" as const, text }] };
