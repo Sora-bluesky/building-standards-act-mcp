@@ -428,7 +428,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 8 tools", async () => {
+    it("listTools returns all 9 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -439,6 +439,7 @@ describe("Integration: MCP Server Tools", () => {
         "get_law",
         "get_laws_batch",
         "search_law",
+        "suggest_related",
         "validate_presets",
         "verify_citation",
       ]);
@@ -1118,6 +1119,37 @@ describe("Integration: MCP Server Tools", () => {
 
       expect(result.isError).toBe(true);
       expect(getText(result)).toContain("空です");
+    });
+  });
+
+  // ── suggest_related ────────────────────────────
+
+  describe("suggest_related", () => {
+    it("returns related laws for an article with references", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "suggest_related",
+        arguments: { law_name: "建築基準法", article_number: "20" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("関連法令");
+      expect(text).toContain("同カテゴリの法令");
+    });
+
+    it("returns error for unknown law", async () => {
+      const result = await client.callTool({
+        name: "suggest_related",
+        arguments: {
+          law_name: "INTEG_存在しない法律",
+          article_number: "1",
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(getText(result)).toContain("エラー");
     });
   });
 });

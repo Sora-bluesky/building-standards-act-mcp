@@ -171,6 +171,30 @@ export interface CitationVerification {
   error_message?: string;
 }
 
+// Related law suggestion result
+export interface RelatedLawSuggestion {
+  source_law: string;
+  source_article: string;
+  directly_referenced: Array<{
+    law_name: string;
+    article?: string;
+    raw_text: string;
+    preset_available: boolean;
+  }>;
+  delegated_to: Array<{
+    raw_text: string;
+    target_type: string;
+  }>;
+  same_law_references: Array<{
+    article: string;
+    raw_text: string;
+  }>;
+  same_group_laws: Array<{
+    law_name: string;
+    law_id: string;
+  }>;
+}
+
 // Kokuji preset entry
 export interface KokujiPreset {
   law_id: string;
