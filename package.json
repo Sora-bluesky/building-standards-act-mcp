@@ -30,6 +30,8 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "jszip": "^3.10.1",
+    "pdf-parse": "^2.4.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

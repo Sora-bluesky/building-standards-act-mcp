@@ -1,0 +1,80 @@
+import { PDFParse } from "pdf-parse";
+import { TTLCache } from "./cache.js";
+
+const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const REQUEST_TIMEOUT = 30_000; // 30 seconds
+
+const pdfTextCache = new TTLCache<string>(PDF_TEXT_CACHE_TTL);
+
+/**
+ * Fetch a PDF binary from a URL with timeout handling.
+ *
+ * @param url - The URL to fetch
+ * @returns The PDF data as a Uint8Array
+ * @throws Error if the fetch fails or times out
+ */
+async function fetchPdfBuffer(url: string): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(
+        `PDF取得に失敗しました (HTTP ${response.status}): ${url}`,
+      );
+    }
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`PDF取得がタイムアウトしました: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Normalize extracted PDF text by trimming whitespace and
+ * collapsing excessive blank lines.
+ */
+function normalizeText(raw: string): string {
+  return raw
+    .replace(/\r\n/g, "\n") // Normalize line breaks
+    .replace(/\r/g, "\n")
+    .replace(/\n{3,}/g, "\n\n") // Collapse 3+ newlines to 2
+    .trim();
+}
+
+/**
+ * Download a PDF from a URL and extract its text content.
+ * Results are cached for 24 hours to avoid redundant downloads.
+ *
+ * @param pdfUrl - The URL of the PDF to download and parse
+ * @returns The extracted text content
+ * @throws Error if the PDF cannot be fetched or parsed
+ */
+export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
+  const cacheKey = `pdf:${pdfUrl}`;
+  const cached = pdfTextCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const data = await fetchPdfBuffer(pdfUrl);
+
+  const parser = new PDFParse({ data });
+  const textResult = await parser.getText();
+  await parser.destroy();
+
+  const text = normalizeText(textResult.text);
+
+  if (!text) {
+    throw new Error(`PDFからテキストを抽出できませんでした: ${pdfUrl}`);
+  }
+
+  pdfTextCache.set(cacheKey, text);
+  return text;
+}
