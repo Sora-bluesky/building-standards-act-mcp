@@ -1,4 +1,11 @@
-import type { LawNode, ParsedArticle } from "./types.js";
+import type {
+  LawNode,
+  ParsedArticle,
+  StructuredArticle,
+  StructuredItem,
+  StructuredParagraph,
+  StructuredSubitem,
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -279,21 +286,18 @@ function articleNodeToParsed(article: LawNode): ParsedArticle {
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Article node search (shared by text and structured parsers)
 // ---------------------------------------------------------------------------
 
 /**
- * Extract a specific article from the law tree.
+ * Find an Article node by number from the law tree.
  *
  * `articleNumber` can be in any of these formats:
  *   "20", "第20条", "20条", "6条の2", "第6条の2", "第百条"
  *
- * Returns null if the article is not found.
+ * Returns the raw Article LawNode, or null if not found.
  */
-export function parseArticle(
-  root: LawNode,
-  articleNumber: string,
-): ParsedArticle | null {
+function findArticleNode(root: LawNode, articleNumber: string): LawNode | null {
   const allArticles = collectArticleNodes(root);
 
   if (allArticles.length === 0) {
@@ -307,7 +311,7 @@ export function parseArticle(
     for (const article of allArticles) {
       const num = article.attr?.["Num"];
       if (num === normalized) {
-        return articleNodeToParsed(article);
+        return article;
       }
     }
   }
@@ -340,7 +344,7 @@ export function parseArticle(
 
     for (const pattern of patternsWithJo) {
       if (titleText === pattern) {
-        return articleNodeToParsed(article);
+        return article;
       }
     }
   }
@@ -348,12 +352,145 @@ export function parseArticle(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Structured article building
+// ---------------------------------------------------------------------------
+
 /**
- * Extract ALL articles from the law tree.
+ * Build a StructuredSubitem (or deeper) from an Item/Subitem node.
+ */
+function buildStructuredSubitems(
+  parent: LawNode,
+  depth: number,
+): StructuredSubitem[] {
+  const itemTag = `Subitem${depth}`;
+  const items = findChildrenByTag(parent, itemTag);
+
+  return items.map((item) => {
+    const titleTag = `Subitem${depth}Title`;
+    const sentenceTag = `Subitem${depth}Sentence`;
+
+    const titleNode = findChildByTag(item, titleTag);
+    const titleText = titleNode ? extractText(titleNode).trim() : "";
+
+    const sentenceNode = findChildByTag(item, sentenceTag);
+    const sentenceText = sentenceNode ? extractText(sentenceNode).trim() : "";
+
+    return {
+      subitem_num: item.attr?.["Num"] ?? "",
+      subitem_title: titleText,
+      subitem_sentence: sentenceText,
+      subitems: buildStructuredSubitems(item, depth + 1),
+    };
+  });
+}
+
+/**
+ * Build StructuredItem array from Item children of a parent node.
+ */
+function buildStructuredItems(parent: LawNode): StructuredItem[] {
+  const items = findChildrenByTag(parent, "Item");
+
+  return items.map((item) => {
+    const titleNode = findChildByTag(item, "ItemTitle");
+    const titleText = titleNode ? extractText(titleNode).trim() : "";
+
+    const sentenceNode = findChildByTag(item, "ItemSentence");
+    const sentenceText = sentenceNode ? extractText(sentenceNode).trim() : "";
+
+    return {
+      item_num: item.attr?.["Num"] ?? "",
+      item_title: titleText,
+      item_sentence: sentenceText,
+      subitems: buildStructuredSubitems(item, 1),
+    };
+  });
+}
+
+/**
+ * Build a StructuredParagraph from a Paragraph node.
+ */
+function buildStructuredParagraph(paragraph: LawNode): StructuredParagraph {
+  const sentenceNode = findChildByTag(paragraph, "ParagraphSentence");
+  const sentenceText = sentenceNode ? extractText(sentenceNode).trim() : "";
+
+  return {
+    paragraph_num: paragraph.attr?.["Num"] ?? "",
+    paragraph_sentence: sentenceText,
+    items: buildStructuredItems(paragraph),
+  };
+}
+
+/**
+ * Convert an Article node to a StructuredArticle.
+ */
+function articleNodeToStructured(article: LawNode): StructuredArticle {
+  const num = article.attr?.["Num"] ?? "";
+
+  const captionNode = findChildByTag(article, "ArticleCaption");
+  const caption = captionNode ? extractText(captionNode).trim() : "";
+
+  const titleNode = findChildByTag(article, "ArticleTitle");
+  const title = titleNode ? extractText(titleNode).trim() : "";
+
+  const paragraphs = findChildrenByTag(article, "Paragraph");
+
+  return {
+    article_num: num,
+    article_caption: caption,
+    article_title: title,
+    paragraphs: paragraphs.map(buildStructuredParagraph),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract a specific article from the law tree as plain text.
+ *
+ * `articleNumber` can be in any of these formats:
+ *   "20", "第20条", "20条", "6条の2", "第6条の2", "第百条"
+ *
+ * Returns null if the article is not found.
+ */
+export function parseArticle(
+  root: LawNode,
+  articleNumber: string,
+): ParsedArticle | null {
+  const node = findArticleNode(root, articleNumber);
+  return node ? articleNodeToParsed(node) : null;
+}
+
+/**
+ * Extract a specific article from the law tree as structured JSON.
+ *
+ * Same input formats as `parseArticle`. Returns hierarchical structure:
+ * Article -> Paragraph -> Item -> Subitem.
+ */
+export function parseArticleStructured(
+  root: LawNode,
+  articleNumber: string,
+): StructuredArticle | null {
+  const node = findArticleNode(root, articleNumber);
+  return node ? articleNodeToStructured(node) : null;
+}
+
+/**
+ * Extract ALL articles from the law tree as plain text.
  */
 export function parseAllArticles(root: LawNode): ParsedArticle[] {
   const articleNodes = collectArticleNodes(root);
   return articleNodes.map(articleNodeToParsed);
+}
+
+/**
+ * Extract ALL articles from the law tree as structured JSON.
+ */
+export function parseAllArticlesStructured(root: LawNode): StructuredArticle[] {
+  const articleNodes = collectArticleNodes(root);
+  return articleNodes.map(articleNodeToStructured);
 }
 
 /**
