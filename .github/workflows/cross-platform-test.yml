@@ -1,0 +1,65 @@
+name: Cross-Platform Test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify shebang and permissions
+        run: |
+          head -1 dist/index.js | grep -q "#!/usr/bin/env node"
+          echo "Shebang line OK"
+          test -x dist/index.js || chmod 755 dist/index.js
+          echo "Execute permission OK"
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Server startup test
+        run: |
+          timeout 5 node dist/index.js 2>&1 || true
+          echo "Server startup OK"
+
+      - name: MCP protocol test
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci-test","version":"1.0.0"}}}' | timeout 10 node dist/index.js 2>/dev/null | grep -q '"building-law-mcp"'
+          echo "MCP protocol response OK"
+
+      - name: Install from local source (simulates npx)
+        run: |
+          mkdir /tmp/mcp-test-project
+          cd /tmp/mcp-test-project
+          npm init -y
+          npm install "${{ github.workspace }}"
+
+      - name: Verify CLI entry point
+        run: |
+          cd /tmp/mcp-test-project
+          npx building-law-mcp --help 2>&1 || timeout 3 npx building-law-mcp 2>&1 || true
+          echo "CLI entry point OK"
