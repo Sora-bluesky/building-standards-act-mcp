@@ -428,7 +428,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 6 tools", async () => {
+    it("listTools returns all 7 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -437,6 +437,7 @@ describe("Integration: MCP Server Tools", () => {
         "get_full_law",
         "get_kokuji",
         "get_law",
+        "get_laws_batch",
         "search_law",
         "validate_presets",
       ]);
@@ -986,6 +987,67 @@ describe("Integration: MCP Server Tools", () => {
       expect(result.isError).toBeFalsy();
       const text = getText(result);
       expect(text).toContain("見つかりませんでした");
+    });
+  });
+
+  // ── get_laws_batch ─────────────────────────────
+
+  describe("get_laws_batch", () => {
+    it("fetches multiple articles from the same law in one batch", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "get_laws_batch",
+        arguments: {
+          requests: [
+            { law_name: "建築基準法", article_number: "1" },
+            { law_name: "建築基準法", article_number: "20" },
+          ],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      const parsed = JSON.parse(text);
+      expect(parsed.total).toBe(2);
+      expect(parsed.success).toBe(2);
+      expect(parsed.results[0].status).toBe("success");
+      expect(parsed.results[1].status).toBe("success");
+    });
+
+    it("handles mixed success and not-found", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "get_laws_batch",
+        arguments: {
+          requests: [
+            { law_name: "建築基準法", article_number: "1" },
+            { law_name: "建築基準法", article_number: "9999" },
+            { law_name: "INTEG_存在しない法律", article_number: "1" },
+          ],
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const parsed = JSON.parse(getText(result));
+      expect(parsed.total).toBe(3);
+      expect(parsed.success).toBe(1);
+      expect(parsed.failed).toBe(2);
+      expect(parsed.results[0].status).toBe("success");
+      expect(parsed.results[1].status).toBe("article_not_found");
+      expect(parsed.results[2].status).toBe("law_not_found");
+    });
+
+    it("returns error for empty requests", async () => {
+      const result = await client.callTool({
+        name: "get_laws_batch",
+        arguments: { requests: [] },
+      });
+
+      expect(result.isError).toBe(true);
+      const text = getText(result);
+      expect(text).toContain("空です");
     });
   });
 });

@@ -138,6 +138,23 @@ export interface LawPreset {
   verified_at: string; // ISO date string, e.g. "2026-03-17"
 }
 
+// Batch fetch result
+export interface BatchFetchItem {
+  law_name: string;
+  article_number: string;
+  status: "success" | "law_not_found" | "article_not_found" | "error";
+  text?: string;
+  structured?: StructuredArticle;
+  error_message?: string;
+}
+
+export interface BatchFetchResult {
+  total: number;
+  success: number;
+  failed: number;
+  results: BatchFetchItem[];
+}
+
 // Kokuji preset entry
 export interface KokujiPreset {
   law_id: string;
