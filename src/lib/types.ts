@@ -155,6 +155,22 @@ export interface BatchFetchResult {
   results: BatchFetchItem[];
 }
 
+// Citation verification result
+export interface CitationVerification {
+  law_name: string;
+  article_number: string;
+  status:
+    | "verified"
+    | "mismatch"
+    | "article_not_found"
+    | "law_not_found"
+    | "error";
+  actual_text?: string;
+  match_score?: number;
+  mismatch_detail?: string;
+  error_message?: string;
+}
+
 // Kokuji preset entry
 export interface KokujiPreset {
   law_id: string;
