@@ -464,6 +464,298 @@ const LAW_CANDIDATES: LawCandidate[] = [
     abbrev: ["耐震改修促進法"],
   },
 
+  // ── 追加法令 ──────────────────────────────────
+
+  // 2章 手続関連規定（追加）
+  {
+    title: "建設業法施行規則",
+    group: "2章 手続関連規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["建設業法施行規則"],
+  },
+
+  // 3章 集団規定・街づくり規定（追加）
+  {
+    title: "都市計画法施行規則",
+    group: "3章 集団規定・街づくり規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["都計規則"],
+  },
+  {
+    title: "土地区画整理法",
+    group: "3章 集団規定・街づくり規定",
+    tier: "Act",
+    abbrev: ["区画整理法"],
+  },
+  {
+    title: "都市緑地法",
+    group: "3章 集団規定・街づくり規定",
+    tier: "Act",
+    abbrev: ["都市緑地法"],
+  },
+  {
+    title: "生産緑地法",
+    group: "3章 集団規定・街づくり規定",
+    tier: "Act",
+    abbrev: ["生産緑地法"],
+  },
+  {
+    title: "国土利用計画法",
+    group: "3章 集団規定・街づくり規定",
+    tier: "Act",
+    abbrev: ["国土利用計画法", "国土法"],
+  },
+
+  // 4章 防火規定・耐火規定（追加）
+  {
+    title: "消防法施行規則",
+    group: "4章 防火規定・耐火規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["消防規則"],
+  },
+  {
+    title: "危険物の規制に関する規則",
+    group: "4章 防火規定・耐火規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["危険物規則"],
+  },
+
+  // 5章 構造規定
+  {
+    title: "地震防災対策特別措置法",
+    group: "5章 構造規定",
+    tier: "Act",
+    abbrev: ["地震防災特措法"],
+  },
+  {
+    title: "津波防災地域づくりに関する法律",
+    group: "5章 構造規定",
+    tier: "Act",
+    abbrev: ["津波防災法"],
+  },
+  {
+    title: "特定都市河川浸水被害対策法",
+    group: "5章 構造規定",
+    tier: "Act",
+    abbrev: ["特定都市河川法"],
+  },
+  {
+    title: "建築物の耐震改修の促進に関する法律施行令",
+    group: "5章 構造規定",
+    tier: "CabinetOrder",
+    abbrev: ["耐震改修促進法施行令"],
+  },
+  {
+    title: "建築物の耐震改修の促進に関する法律施行規則",
+    group: "5章 構造規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["耐震改修促進法施行規則"],
+  },
+  {
+    title: "住宅地区改良法",
+    group: "5章 構造規定",
+    tier: "Act",
+    abbrev: ["住宅地区改良法"],
+  },
+  {
+    title: "建築物における衛生的環境の確保に関する法律",
+    group: "5章 構造規定",
+    tier: "Act",
+    abbrev: ["建築物衛生法", "ビル管法"],
+  },
+
+  // 6章 建築材料
+  {
+    title: "産業標準化法",
+    group: "6章 建築材料",
+    tier: "Act",
+    abbrev: ["JIS法", "産業標準化法"],
+  },
+  {
+    title: "製造物責任法",
+    group: "6章 建築材料",
+    tier: "Act",
+    abbrev: ["PL法", "製造物責任法"],
+  },
+  {
+    title: "石綿障害予防規則",
+    group: "6章 建築材料",
+    tier: "MinisterialOrdinance",
+    abbrev: ["石綿則", "アスベスト規則"],
+  },
+
+  // 7章 設備関連規定（追加）
+  {
+    title: "浄化槽法施行令",
+    group: "7章 設備関連規定",
+    tier: "CabinetOrder",
+    abbrev: ["浄化槽法施行令"],
+  },
+  {
+    title: "浄化槽法施行規則",
+    group: "7章 設備関連規定",
+    tier: "MinisterialOrdinance",
+    abbrev: ["浄化槽法施行規則"],
+  },
+  {
+    title: "電気工事士法",
+    group: "7章 設備関連規定",
+    tier: "Act",
+    abbrev: ["電気工事士法"],
+  },
+  {
+    title: "電気用品安全法",
+    group: "7章 設備関連規定",
+    tier: "Act",
+    abbrev: ["電安法"],
+  },
+
+  // 8章 その他
+  {
+    title: "特定住宅瑕疵担保責任の履行の確保等に関する法律",
+    group: "8章 その他",
+    tier: "Act",
+    abbrev: ["住宅瑕疵担保履行法"],
+  },
+  {
+    title: "不動産登記法",
+    group: "8章 その他",
+    tier: "Act",
+    abbrev: ["不登法"],
+  },
+  {
+    title: "借地借家法",
+    group: "8章 その他",
+    tier: "Act",
+    abbrev: ["借地借家法"],
+  },
+  {
+    title: "不動産の鑑定評価に関する法律",
+    group: "8章 その他",
+    tier: "Act",
+    abbrev: ["不動産鑑定法"],
+  },
+  {
+    title: "住宅宿泊事業法",
+    group: "8章 その他",
+    tier: "Act",
+    abbrev: ["民泊新法"],
+  },
+
+  // 9章 建築基準関係規定・建築関連法令（追加）
+  {
+    title: "道路交通法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["道交法"],
+  },
+  {
+    title: "都市公園法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["都市公園法"],
+  },
+  {
+    title: "自然公園法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["自然公園法"],
+  },
+  {
+    title: "古都における歴史的風土の保存に関する特別措置法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["古都保存法"],
+  },
+  {
+    title: "空家等対策の推進に関する特別措置法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["空家対策特措法"],
+  },
+  {
+    title: "介護保険法",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["介護保険法"],
+  },
+  {
+    title: "障害者の日常生活及び社会生活を総合的に支援するための法律",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["障害者総合支援法"],
+  },
+  {
+    title: "墓地、埋葬等に関する法律",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["墓地埋葬法"],
+  },
+  {
+    title: "高齢者の居住の安定確保に関する法律",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "Act",
+    abbrev: ["高齢者住まい法"],
+  },
+  {
+    title: "労働安全衛生法施行令",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "CabinetOrder",
+    abbrev: ["安衛令"],
+  },
+  {
+    title: "宅地造成及び特定盛土等規制法施行令",
+    group: "9章 建築基準関係規定・建築関連法令",
+    tier: "CabinetOrder",
+    abbrev: ["盛土規制法施行令"],
+  },
+
+  // 10章 省エネ法・住宅関連法（追加）
+  {
+    title: "住宅の品質確保の促進等に関する法律施行令",
+    group: "10章 省エネ法・住宅関連法",
+    tier: "CabinetOrder",
+    abbrev: ["品確法施行令"],
+  },
+  {
+    title: "住宅の品質確保の促進等に関する法律施行規則",
+    group: "10章 省エネ法・住宅関連法",
+    tier: "MinisterialOrdinance",
+    abbrev: ["品確法施行規則"],
+  },
+  {
+    title: "長期優良住宅の普及の促進に関する法律施行令",
+    group: "10章 省エネ法・住宅関連法",
+    tier: "CabinetOrder",
+    abbrev: ["長期優良住宅法施行令"],
+  },
+  {
+    title: "長期優良住宅の普及の促進に関する法律施行規則",
+    group: "10章 省エネ法・住宅関連法",
+    tier: "MinisterialOrdinance",
+    abbrev: ["長期優良住宅法施行規則"],
+  },
+  {
+    title: "建築物のエネルギー消費性能の向上等に関する法律施行規則",
+    group: "10章 省エネ法・住宅関連法",
+    tier: "MinisterialOrdinance",
+    abbrev: ["建築物省エネ法施行規則"],
+  },
+
+  // 11章 既存建築物関連（追加）
+  {
+    title: "被災市街地復興特別措置法",
+    group: "11章 既存建築物関連",
+    tier: "Act",
+    abbrev: ["被災市街地復興法"],
+  },
+  {
+    title: "被災区分所有建物の再建等に関する特別措置法",
+    group: "11章 既存建築物関連",
+    tier: "Act",
+    abbrev: ["被災マンション法"],
+  },
+
   // Kokuji (告示)
   {
     title: "耐火構造の構造方法を定める件",
