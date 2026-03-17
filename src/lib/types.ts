@@ -49,6 +49,22 @@ export interface EgovLawDataResponse {
   law_full_text: LawNode;
 }
 
+export interface EgovLawRevisionsResponse {
+  law_info: EgovLawInfo;
+  revisions: EgovRevisionInfo[];
+}
+
+export interface LawUpdateCheckResult {
+  title: string;
+  law_id: string;
+  status: "up_to_date" | "updated" | "repealed" | "error";
+  verified_at: string;
+  latest_amendment_date?: string;
+  latest_amendment_law?: string;
+  revisions?: EgovRevisionInfo[];
+  error_message?: string;
+}
+
 // Recursive tree node from e-Gov API (XML-like JSON structure)
 export interface LawNode {
   tag: string;

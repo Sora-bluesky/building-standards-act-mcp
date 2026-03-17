@@ -308,10 +308,30 @@ function getText(result: Awaited<ReturnType<Client["callTool"]>>): string {
 
 // ── URL Router helpers ──────────────────────────────
 
+const DEFAULT_REVISIONS_RESPONSE = {
+  law_info: {
+    law_type: "Act",
+    law_id: "325AC0000000201",
+    law_num: "昭和二十五年法律第二百一号",
+  },
+  revisions: [
+    makeRevisionInfo({
+      amendment_promulgate_date: "2025-06-01",
+      amendment_enforcement_date: "2025-10-01",
+      repeal_status: "",
+    }),
+  ],
+};
+
 function setupDefaultRouter() {
   mockFetch.mockImplementation(async (url: string) => {
     if (typeof url !== "string") {
       throw new Error(`Unexpected fetch input: ${url}`);
+    }
+
+    // Law revisions endpoint
+    if (url.includes("/law_revisions/")) {
+      return createMockResponse(DEFAULT_REVISIONS_RESPONSE);
     }
 
     // Law data endpoint
@@ -408,11 +428,12 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 5 tools", async () => {
+    it("listTools returns all 6 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
       expect(names).toEqual([
+        "check_law_updates",
         "get_full_law",
         "get_kokuji",
         "get_law",
@@ -863,6 +884,108 @@ describe("Integration: MCP Server Tools", () => {
       expect(result.isError).toBeFalsy();
       const text = getText(result);
       expect(text).toContain("該当する告示を確認できませんでした");
+    });
+  });
+
+  // ── check_law_updates ────────────────────────────
+
+  describe("check_law_updates", () => {
+    it("checks a single law by name and returns up_to_date", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "check_law_updates",
+        arguments: { law_name: "建築基準法" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("法令改正チェック結果");
+      expect(text).toContain("最新: 1件");
+    });
+
+    // Use different laws per test to avoid revisionsCache collision
+    it("detects update when amendment date is newer than verified_at", async () => {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes("/law_revisions/")) {
+          return createMockResponse({
+            law_info: { law_id: "325CO0000000338" },
+            revisions: [
+              makeRevisionInfo({
+                amendment_promulgate_date: "2026-04-01",
+                repeal_status: "",
+              }),
+            ],
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await client.callTool({
+        name: "check_law_updates",
+        arguments: { law_name: "建築基準法施行令" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("更新検出");
+      expect(text).toContain("2026-04-01");
+    });
+
+    it("shows revision history with show_history=true", async () => {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes("/law_revisions/")) {
+          return createMockResponse({
+            law_info: { law_id: "325M50004000040" },
+            revisions: [
+              makeRevisionInfo({
+                amendment_promulgate_date: "2025-06-01",
+                repeal_status: "",
+              }),
+              makeRevisionInfo({
+                law_revision_id: "rev0",
+                amendment_promulgate_date: "2024-04-01",
+                repeal_status: "",
+              }),
+            ],
+          });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+      const result = await client.callTool({
+        name: "check_law_updates",
+        arguments: { law_name: "建築基準法施行規則", show_history: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("改正履歴");
+      expect(text).toContain("リビジョン一覧");
+      expect(text).toContain("2025-06-01");
+      expect(text).toContain("2024-04-01");
+    });
+
+    it("returns not found for unknown law name", async () => {
+      const result = await client.callTool({
+        name: "check_law_updates",
+        arguments: { law_name: "INTEG_存在しない法令" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("見つかりませんでした");
+    });
+
+    it("returns not found for non-existent group", async () => {
+      const result = await client.callTool({
+        name: "check_law_updates",
+        arguments: { group: "99章" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      expect(text).toContain("見つかりませんでした");
     });
   });
 });
