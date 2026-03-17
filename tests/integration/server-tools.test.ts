@@ -428,11 +428,12 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 9 tools", async () => {
+    it("listTools returns all 10 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
       expect(names).toEqual([
+        "analyze_article",
         "check_law_updates",
         "get_full_law",
         "get_kokuji",
@@ -1142,6 +1143,43 @@ describe("Integration: MCP Server Tools", () => {
     it("returns error for unknown law", async () => {
       const result = await client.callTool({
         name: "suggest_related",
+        arguments: {
+          law_name: "INTEG_存在しない法律",
+          article_number: "1",
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(getText(result)).toContain("エラー");
+    });
+  });
+
+  // ── analyze_article ────────────────────────────
+
+  describe("analyze_article", () => {
+    it("returns JSON analysis for an article", async () => {
+      setupDefaultRouter();
+
+      const result = await client.callTool({
+        name: "analyze_article",
+        arguments: { law_name: "建築基準法", article_number: "20" },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = getText(result);
+      const parsed = JSON.parse(text);
+      expect(parsed.law_name).toBe("建築基準法");
+      expect(parsed.article_num).toBe("20");
+      expect(parsed.structure).toBeDefined();
+      expect(parsed.structure.paragraph_count).toBeGreaterThanOrEqual(1);
+      expect(parsed.paragraph_summaries).toBeDefined();
+      expect(parsed.reference_summary).toBeDefined();
+      expect(parsed.structured_data).toBeDefined();
+    });
+
+    it("returns error for unknown law", async () => {
+      const result = await client.callTool({
+        name: "analyze_article",
         arguments: {
           law_name: "INTEG_存在しない法律",
           article_number: "1",

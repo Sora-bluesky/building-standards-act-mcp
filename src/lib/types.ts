@@ -195,6 +195,35 @@ export interface RelatedLawSuggestion {
   }>;
 }
 
+// Article analysis result
+export interface ArticleAnalysis {
+  law_name: string;
+  law_num: string;
+  article_num: string;
+  article_title: string;
+  caption: string;
+  structure: {
+    paragraph_count: number;
+    item_count: number;
+    subitem_count: number;
+    total_characters: number;
+  };
+  paragraph_summaries: Array<{
+    paragraph_num: string;
+    preview: string;
+    item_count: number;
+  }>;
+  reference_summary: {
+    total: number;
+    cross_law: number;
+    same_law: number;
+    relative: number;
+    delegation: number;
+    referenced_laws: string[];
+  };
+  structured_data: StructuredArticle;
+}
+
 // Kokuji preset entry
 export interface KokujiPreset {
   law_id: string;
