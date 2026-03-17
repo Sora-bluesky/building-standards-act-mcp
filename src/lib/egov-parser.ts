@@ -6,6 +6,7 @@ import type {
   StructuredParagraph,
   StructuredSubitem,
 } from "./types.js";
+import { detectReferences } from "./reference-detector.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -276,12 +277,14 @@ function articleNodeToParsed(article: LawNode): ParsedArticle {
   const title = titleNode ? extractText(titleNode).trim() : "";
 
   const text = renderArticleBody(article);
+  const references = detectReferences(text);
 
   return {
     article_num: num,
     article_caption: caption,
     article_title: title,
     text,
+    ...(references.length > 0 ? { references } : {}),
   };
 }
 
@@ -434,12 +437,15 @@ function articleNodeToStructured(article: LawNode): StructuredArticle {
   const title = titleNode ? extractText(titleNode).trim() : "";
 
   const paragraphs = findChildrenByTag(article, "Paragraph");
+  const bodyText = renderArticleBody(article);
+  const references = detectReferences(bodyText);
 
   return {
     article_num: num,
     article_caption: caption,
     article_title: title,
     paragraphs: paragraphs.map(buildStructuredParagraph),
+    ...(references.length > 0 ? { references } : {}),
   };
 }
 

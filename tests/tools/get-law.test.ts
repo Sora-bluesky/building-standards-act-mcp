@@ -213,4 +213,36 @@ describe("get_law tool", () => {
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("第9999条");
   });
+
+  it("includes reference summary in text format when references exist", async () => {
+    const mockLawData = {
+      law_full_text: { tag: "Law", children: [] },
+    };
+    const mockArticle = {
+      article_num: "20",
+      article_title: "第二十条",
+      article_caption: "",
+      text: "建築基準法施行令第36条に適合する",
+      references: [
+        {
+          raw_text: "建築基準法施行令第36条",
+          ref_type: "cross_law" as const,
+          target_law: "建築基準法施行令",
+          target_article: "36",
+        },
+      ],
+    };
+
+    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(parseArticle).mockReturnValue(mockArticle);
+
+    const result = await handler({
+      law_name: "建築基準法",
+      article_number: "第20条",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("■ 検出された参照:");
+    expect(result.content[0].text).toContain("[他法令] 建築基準法施行令第36条");
+  });
 });

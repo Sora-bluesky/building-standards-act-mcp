@@ -68,16 +68,32 @@ export function registerGetLawTool(server: McpServer): void {
           throw new ArticleNotFoundError(article_number, preset.title);
         }
 
-        const text = [
+        const lines = [
           `【${preset.title}】${article.article_title}`,
           article.article_caption ? article.article_caption : "",
           "",
           article.text,
-          "",
-          `出典: e-Gov法令検索（法令番号: ${preset.law_num}）`,
-        ]
-          .filter((line) => line !== undefined)
-          .join("\n");
+        ].filter((line) => line !== undefined);
+
+        if (article.references && article.references.length > 0) {
+          const refLabels: Record<string, string> = {
+            cross_law: "他法令",
+            same_law: "同法令",
+            relative: "相対参照",
+            delegation: "委任",
+            unknown: "その他",
+          };
+          lines.push("");
+          lines.push("■ 検出された参照:");
+          for (const ref of article.references) {
+            const label = refLabels[ref.ref_type] ?? ref.ref_type;
+            lines.push(`  - [${label}] ${ref.raw_text}`);
+          }
+        }
+
+        lines.push("");
+        lines.push(`出典: e-Gov法令検索（法令番号: ${preset.law_num}）`);
+        const text = lines.join("\n");
 
         return { content: [{ type: "text" as const, text }] };
       } catch (error) {
