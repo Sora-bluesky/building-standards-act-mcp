@@ -1,4 +1,4 @@
-import { TTLCache } from "./cache.js";
+import { createCache } from "./cache.js";
 import { EgovApiError } from "./errors.js";
 import { withRetry, CircuitBreaker } from "./resilience.js";
 import type {
@@ -13,9 +13,16 @@ const LAW_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REVISIONS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
-const searchCache = new TTLCache<EgovLawSearchResponse>(SEARCH_CACHE_TTL);
-const lawDataCache = new TTLCache<EgovLawDataResponse>(LAW_DATA_CACHE_TTL);
-const revisionsCache = new TTLCache<EgovLawRevisionsResponse>(
+const searchCache = createCache<EgovLawSearchResponse>(
+  "search",
+  SEARCH_CACHE_TTL,
+);
+const lawDataCache = createCache<EgovLawDataResponse>(
+  "law-data",
+  LAW_DATA_CACHE_TTL,
+);
+const revisionsCache = createCache<EgovLawRevisionsResponse>(
+  "revisions",
   REVISIONS_CACHE_TTL,
 );
 

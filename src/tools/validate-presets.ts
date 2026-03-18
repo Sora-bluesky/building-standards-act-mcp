@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LawRegistry } from "../lib/law-registry.js";
 import { searchLaws } from "../lib/egov-client.js";
-import { TTLCache } from "../lib/cache.js";
+import { createCache } from "../lib/cache.js";
 
 const registry = new LawRegistry();
 
@@ -24,7 +24,10 @@ interface ValidationResponse {
   results: PresetValidationResult[];
 }
 
-const validationCache = new TTLCache<ValidationResponse>(VALIDATION_CACHE_TTL);
+const validationCache = createCache<ValidationResponse>(
+  "validation",
+  VALIDATION_CACHE_TTL,
+);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
