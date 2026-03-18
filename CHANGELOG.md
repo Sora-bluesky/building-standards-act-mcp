@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-18
+
+### Added
+
+- Vercel deploy support: MCP-over-HTTP + REST API + OpenAPI 3.1 spec
+- `/api/mcp` endpoint: Streamable HTTP transport (stateless) for Claude.ai / Gemini CLI
+- `/api/tools/[name]` endpoint: REST API with dynamic routing for ChatGPT custom GPTs
+- `/api/openapi.json` endpoint: auto-generated OpenAPI 3.1 spec for GPTs Actions
+- `tool-invoker.ts`: Client ↔ InMemoryTransport ↔ McpServer adapter
+- `openapi-spec.ts`: OpenAPI spec generator from MCP tool definitions
+- `vercel.json`: maxDuration 30s, CORS headers
+- `BUILDING_LAW_REQUEST_TIMEOUT` environment variable for configurable API timeout
+- Deploy to Vercel button in README
+- Setup guides for ChatGPT, Claude.ai, and Gemini CLI
+- Hallucination prevention workflow documentation with 4-stage diagram
+
+### Changed
+
+- Tests expanded: 349 → 362 across 29 test files
+- `egov-client.ts`: `REQUEST_TIMEOUT` now configurable via environment variable
+
 ## [0.4.0] - 2026-03-18
 
 ### Added

@@ -11,7 +11,7 @@ describe("openapi-spec", () => {
     const spec = await generateOpenApiSpec("https://example.com");
     expect(spec.openapi).toBe("3.1.0");
     expect(spec.info.title).toBeTruthy();
-    expect(spec.info.version).toBe("0.4.0");
+    expect(spec.info.version).toBe("0.5.0");
   });
 
   it("uses provided baseUrl in servers", async () => {
