@@ -12,7 +12,7 @@ import { registerAnalyzeArticleTool } from "./tools/analyze-article.js";
 import { registerGetMetricsTool } from "./tools/get-metrics.js";
 
 const SERVER_NAME = "building-law-mcp";
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.4.0";
 
 const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタントです。
 
