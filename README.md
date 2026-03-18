@@ -118,35 +118,22 @@ claude mcp add building-standards-act -- npx -y building-standards-act-mcp
 VS Code 拡張機能では `npx` 経由の起動が `Connection closed` エラーになる場合があります。
 プロジェクトルートに `.mcp.json` を作成してください。
 
-**推奨: `cmd /c` ラッパー方式**
-
-```json
-{
-  "mcpServers": {
-    "building-standards-act": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "building-standards-act-mcp"]
-    }
-  }
-}
-```
-
-**フォールバック: `node.exe` フルパス方式**
-
-上記で解消しない場合は、グローバルインストール後に `node.exe` で直接指定してください。
+**Step 1: グローバルインストール**
 
 ```bash
 npm install -g building-standards-act-mcp
 ```
 
-パスの確認:
+**Step 2: パスの確認**
 
 ```bash
-where node        # → node.exe のフルパス
+where node        # → node.exe のフルパス（例: C:\Program Files\nodejs\node.exe）
 npm root -g       # → グローバル node_modules のパス
 ```
 
-`.mcp.json` の例（取得したパスに置き換えてください）:
+**Step 3: `.mcp.json` を作成**
+
+取得したパスで置き換えてください（パス区切りは `/` を使用）:
 
 ```json
 {
