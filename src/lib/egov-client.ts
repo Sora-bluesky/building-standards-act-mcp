@@ -13,7 +13,8 @@ const BASE_URL = "https://laws.e-gov.go.jp/api/2";
 const SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const LAW_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REVISIONS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const REQUEST_TIMEOUT = 30_000; // 30 seconds
+const REQUEST_TIMEOUT =
+  Number(process.env.BUILDING_LAW_REQUEST_TIMEOUT) || 30_000; // 30 seconds
 
 const searchCache = createCache<EgovLawSearchResponse>(
   "search",
