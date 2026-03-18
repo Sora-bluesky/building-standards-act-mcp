@@ -29,6 +29,7 @@ Thumbs.db
 
 # === Editor ===
 .vscode/
+.mcp.json
 
 # === Claude Code / tobari ===
 .claude/

@@ -55,7 +55,7 @@ jobs:
             const {spawn}=require('child_process');
             const p=spawn('node',['dist/index.js'],{stdio:['pipe','pipe','ignore']});
             let out='';
-            p.stdout.on('data',d=>{out+=d;if(out.includes('building-law-mcp')){console.log('MCP protocol response OK');p.kill();process.exit(0)}});
+            p.stdout.on('data',d=>{out+=d;if(out.includes('building-standards-act-mcp')){console.log('MCP protocol response OK');p.kill();process.exit(0)}});
             p.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'ci-test',version:'1.0.0'}}})+'\n');
             setTimeout(()=>{console.error('Timeout');p.kill();process.exit(1)},10000);
           "
@@ -70,5 +70,5 @@ jobs:
       - name: Verify CLI entry point
         run: |
           cd /tmp/mcp-test-project
-          node -e "const c=require('child_process').spawn('npx',['building-law-mcp'],{shell:true});setTimeout(()=>{c.kill();process.exit(0)},3000)" 2>&1 || true
+          node -e "const c=require('child_process').spawn('npx',['building-standards-act-mcp'],{shell:true});setTimeout(()=>{c.kill();process.exit(0)},3000)" 2>&1 || true
           echo "CLI entry point OK"
