@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { TTLCache } from "./cache.js";
+import { createCache } from "./cache.js";
 
 const MLIT_NOTICE_URL = "https://www.mlit.go.jp/notice/";
 const EXCEL_URL_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -23,8 +23,14 @@ const COL_ORGANIZATION = 3;
 // COL_LINK_TEXT = 4 (unused)
 const COL_PDF_URL = 5;
 
-const excelUrlCache = new TTLCache<string>(EXCEL_URL_CACHE_TTL);
-const excelDataCache = new TTLCache<MlitNoticeEntry[]>(EXCEL_DATA_CACHE_TTL);
+const excelUrlCache = createCache<string>(
+  "mlit-excel-url",
+  EXCEL_URL_CACHE_TTL,
+);
+const excelDataCache = createCache<MlitNoticeEntry[]>(
+  "mlit-excel-data",
+  EXCEL_DATA_CACHE_TTL,
+);
 
 const EXCEL_URL_CACHE_KEY = "mlit:excel_url";
 const EXCEL_DATA_CACHE_KEY = "mlit:excel_data";

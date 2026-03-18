@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-18
+
+### Added
+
+- `get_metrics` tool: server usage metrics (tool calls, API requests, cache hit rates, uptime)
+- Persistent file-based cache (`FileCache`): survives server restarts via `BUILDING_LAW_CACHE=file`
+- `ICache<T>` interface: polymorphic cache abstraction with `createCache()` factory
+- Structured JSON logger (`logger.ts`): stderr output, configurable via `BUILDING_LAW_LOG_LEVEL`
+- Metrics collector (`metrics.ts`): tool/API/cache statistics with `_resetMetrics()` for testing
+- Retry with exponential backoff and jitter for e-Gov API calls (`resilience.ts`)
+- Circuit breaker pattern: auto-opens after 5 consecutive failures, half-open after 30s
+
+### Changed
+
+- MCP tools expanded: 10 → 11
+- Tests expanded: 310 → 349 across 27 test files
+- All 7 cache instances migrated from `new TTLCache()` to `createCache()` factory
+- `egov-client.ts`: API call logging and metrics instrumentation added
+- `index.ts`: startup log added
+
 ## [0.3.0] - 2026-03-18
 
 ### Added
@@ -59,3 +79,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.1.0
 [0.2.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.2.0
 [0.3.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.3.0
+[0.4.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.4.0

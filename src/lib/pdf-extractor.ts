@@ -1,10 +1,10 @@
 import { PDFParse } from "pdf-parse";
-import { TTLCache } from "./cache.js";
+import { createCache } from "./cache.js";
 
 const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
-const pdfTextCache = new TTLCache<string>(PDF_TEXT_CACHE_TTL);
+const pdfTextCache = createCache<string>("pdf-text", PDF_TEXT_CACHE_TTL);
 
 /**
  * Fetch a PDF binary from a URL with timeout handling.

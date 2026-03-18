@@ -1,5 +1,7 @@
-import { TTLCache } from "./cache.js";
+import { createCache } from "./cache.js";
 import { EgovApiError } from "./errors.js";
+import { logger } from "./logger.js";
+import { recordApiCall, recordCacheHit } from "./metrics.js";
 import { withRetry, CircuitBreaker } from "./resilience.js";
 import type {
   EgovLawSearchResponse,
@@ -13,9 +15,16 @@ const LAW_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REVISIONS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
-const searchCache = new TTLCache<EgovLawSearchResponse>(SEARCH_CACHE_TTL);
-const lawDataCache = new TTLCache<EgovLawDataResponse>(LAW_DATA_CACHE_TTL);
-const revisionsCache = new TTLCache<EgovLawRevisionsResponse>(
+const searchCache = createCache<EgovLawSearchResponse>(
+  "search",
+  SEARCH_CACHE_TTL,
+);
+const lawDataCache = createCache<EgovLawDataResponse>(
+  "law-data",
+  LAW_DATA_CACHE_TTL,
+);
+const revisionsCache = createCache<EgovLawRevisionsResponse>(
+  "revisions",
   REVISIONS_CACHE_TTL,
 );
 
@@ -78,9 +87,25 @@ async function fetchJsonRaw<T>(url: string): Promise<T> {
  * Fetch JSON with retry and circuit breaker.
  */
 async function fetchJson<T>(url: string): Promise<T> {
-  return circuitBreaker.execute(() =>
-    withRetry(() => fetchJsonRaw<T>(url), retryOptions),
-  );
+  const endpoint = url.replace(BASE_URL, "").split("?")[0];
+  const start = Date.now();
+  try {
+    const result = await circuitBreaker.execute(() =>
+      withRetry(() => fetchJsonRaw<T>(url), retryOptions),
+    );
+    recordApiCall(endpoint, Date.now() - start, 200);
+    logger.debug("api call", { endpoint, ms: Date.now() - start });
+    return result;
+  } catch (error) {
+    const status = error instanceof EgovApiError ? error.statusCode : undefined;
+    recordApiCall(endpoint, Date.now() - start, status);
+    logger.warn("api call failed", {
+      endpoint,
+      status,
+      ms: Date.now() - start,
+    });
+    throw error;
+  }
 }
 
 /**
@@ -93,8 +118,10 @@ export async function searchLaws(
   const cacheKey = `search:${lawTitle}`;
   const cached = searchCache.get(cacheKey);
   if (cached) {
+    recordCacheHit("search", true);
     return cached;
   }
+  recordCacheHit("search", false);
 
   const url = `${BASE_URL}/laws?law_title=${encodeURIComponent(lawTitle)}`;
   const result = await fetchJson<EgovLawSearchResponse>(url);
@@ -111,8 +138,10 @@ export async function getLawData(lawId: string): Promise<EgovLawDataResponse> {
   const cacheKey = `law:${lawId}`;
   const cached = lawDataCache.get(cacheKey);
   if (cached) {
+    recordCacheHit("law-data", true);
     return cached;
   }
+  recordCacheHit("law-data", false);
 
   const url = `${BASE_URL}/law_data/${encodeURIComponent(lawId)}`;
   const result = await fetchJson<EgovLawDataResponse>(url);
@@ -131,8 +160,10 @@ export async function getLawRevisions(
   const cacheKey = `revisions:${lawId}`;
   const cached = revisionsCache.get(cacheKey);
   if (cached) {
+    recordCacheHit("revisions", true);
     return cached;
   }
+  recordCacheHit("revisions", false);
 
   const url = `${BASE_URL}/law_revisions/${encodeURIComponent(lawId)}`;
   const result = await fetchJson<EgovLawRevisionsResponse>(url);
