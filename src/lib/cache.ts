@@ -74,12 +74,16 @@ export class TTLCache<T> implements ICache<T> {
   }
 }
 
-const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".cache", "building-law-mcp");
+const DEFAULT_CACHE_DIR = path.join(
+  os.homedir(),
+  ".cache",
+  "building-standards-act-mcp",
+);
 
 /**
  * File-based TTL cache. Entries persist across server restarts.
  * Each key is stored as an individual JSON file under
- * `~/.cache/building-law-mcp/{name}/{hash}.json`.
+ * `~/.cache/building-standards-act-mcp/{name}/{hash}.json`.
  */
 export class FileCache<T> implements ICache<T> {
   private readonly dir: string;
