@@ -1,5 +1,6 @@
 import { TTLCache } from "./cache.js";
 import { EgovApiError } from "./errors.js";
+import { withRetry, CircuitBreaker } from "./resilience.js";
 import type {
   EgovLawSearchResponse,
   EgovLawDataResponse,
@@ -18,7 +19,24 @@ const revisionsCache = new TTLCache<EgovLawRevisionsResponse>(
   REVISIONS_CACHE_TTL,
 );
 
-async function fetchJson<T>(url: string): Promise<T> {
+const circuitBreaker = new CircuitBreaker();
+
+// Retry options (configurable for testing)
+let retryOptions: Partial<import("./resilience.js").RetryOptions> = {};
+
+/** Configure retry behavior (for testing only). */
+export function _setRetryOptions(
+  opts: Partial<import("./resilience.js").RetryOptions>,
+): void {
+  retryOptions = opts;
+}
+
+/** Reset circuit breaker state (for testing only). */
+export function _resetCircuitBreaker(): void {
+  circuitBreaker.reset();
+}
+
+async function fetchJsonRaw<T>(url: string): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -54,6 +72,15 @@ async function fetchJson<T>(url: string): Promise<T> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Fetch JSON with retry and circuit breaker.
+ */
+async function fetchJson<T>(url: string): Promise<T> {
+  return circuitBreaker.execute(() =>
+    withRetry(() => fetchJsonRaw<T>(url), retryOptions),
+  );
 }
 
 /**

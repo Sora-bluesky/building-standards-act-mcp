@@ -17,10 +17,18 @@ import type {
   LawNode,
 } from "../../src/lib/types.js";
 
+import {
+  _setRetryOptions,
+  _resetCircuitBreaker,
+} from "../../src/lib/egov-client.js";
+
 // ── Fetch mock ──────────────────────────────────────
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+
+// Disable retries in integration tests to avoid timeouts
+_setRetryOptions({ maxRetries: 0 });
 
 function createMockResponse(body: unknown, status = 200, statusText = "OK") {
   return {
@@ -423,6 +431,7 @@ describe("Integration: MCP Server Tools", () => {
 
   beforeEach(() => {
     mockFetch.mockReset();
+    _resetCircuitBreaker();
   });
 
   // ── Server basics ───────────────────────────────

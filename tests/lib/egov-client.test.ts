@@ -3,11 +3,16 @@ import {
   searchLaws,
   getLawData,
   getLawRevisions,
+  _setRetryOptions,
+  _resetCircuitBreaker,
 } from "../../src/lib/egov-client.js";
 import { EgovApiError } from "../../src/lib/errors.js";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+
+// Disable retries in tests to avoid timeouts
+_setRetryOptions({ maxRetries: 0 });
 
 function createMockResponse(body: unknown, status = 200, statusText = "OK") {
   return {
@@ -21,6 +26,7 @@ function createMockResponse(body: unknown, status = 200, statusText = "OK") {
 describe("egov-client", () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    _resetCircuitBreaker();
   });
 
   afterEach(() => {
