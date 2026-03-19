@@ -1,4 +1,3 @@
-import { PDFParse } from "pdf-parse";
 import { createCache } from "./cache.js";
 
 const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
@@ -65,6 +64,9 @@ export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
 
   const data = await fetchPdfBuffer(pdfUrl);
 
+  // Lazy import: pdf-parse depends on pdfjs-dist which requires @napi-rs/canvas.
+  // Static import crashes serverless environments (Vercel) that lack native libs.
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data });
   const textResult = await parser.getText();
   await parser.destroy();
