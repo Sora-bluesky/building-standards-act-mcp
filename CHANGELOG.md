@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-03-19
+
+### Fixed
+
+- **get_kokuji: Vercel serverless compatibility** — PDF text extraction failed on Vercel due to missing `DOMMatrix` (Node 20/22) and pdfjs-dist worker module not bundled. Added DOMMatrix polyfill, switched from pdf-parse to direct pdfjs-dist usage with `import.meta.resolve` for worker path, and added `includeFiles` in vercel.json.
+- **get_kokuji: User-Agent headers** — Added User-Agent headers to all MLIT and PDF fetch requests to prevent bot-blocking by government servers.
+- **get_kokuji: diagnostic info on failure** — Error messages now include PDF URL and failure reason to aid debugging.
+
 ## [1.1.1] - 2026-03-19
 
 ### Fixed
