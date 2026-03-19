@@ -77,6 +77,47 @@ describe("resolveLawId", () => {
     expect(result).toBeNull();
   });
 
+  it("selects correct law from multiple search results (バリアフリー法)", async () => {
+    const correctTitle = "高齢者、障害者等の移動等の円滑化の促進に関する法律";
+    vi.mocked(searchLaws).mockResolvedValue({
+      total_count: 3,
+      count: 3,
+      laws: [
+        {
+          law_info: {
+            law_id: "WRONG001",
+            law_num: "昭和二十九年省令第百号",
+          },
+          revision_info: { law_title: "土地区画整理事業に関する省令" },
+          current_revision_info: {
+            law_title: "土地区画整理事業に関する省令",
+          },
+        },
+        {
+          law_info: {
+            law_id: "CORRECT",
+            law_num: "平成十八年法律第九十一号",
+          },
+          revision_info: { law_title: correctTitle },
+          current_revision_info: { law_title: correctTitle },
+        },
+        {
+          law_info: {
+            law_id: "WRONG002",
+            law_num: "平成十八年政令第三百七十九号",
+          },
+          revision_info: { law_title: correctTitle + "施行令" },
+          current_revision_info: { law_title: correctTitle + "施行令" },
+        },
+      ],
+    } as any);
+
+    const result = await resolveLawId("バリアフリー法");
+    expect(result).not.toBeNull();
+    expect(result!.law_id).toBe("CORRECT");
+    expect(result!.title).toBe(correctTitle);
+  });
+
   it("uses revision_info.law_title for title", async () => {
     vi.mocked(searchLaws).mockResolvedValue({
       total_count: 1,

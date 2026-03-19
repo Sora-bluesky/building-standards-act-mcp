@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-03-19
+
+### Fixed
+
+- **法令検索の best-match 導入**: e-Gov API 検索結果の先頭1件を無条件採用していたため、バリアフリー法等の長い法令名が「土地区画整理事業に関する省令」等の無関係な法令に誤解決されるバグを修正。完全一致 > 最短部分一致 > フォールバックの3段階マッチングを導入
+- **pdf-parse パッケージ削除**: pdfjs-dist を直接依存に変更し、不要な pdf-parse（+ @napi-rs/canvas）を除去
+
+### Changed
+
+- README に自治体条例（都道府県・市区町村）は e-Gov API 対象外である旨の制限事項を追記
+- Tests expanded: 378 → 386 across 30 test files
+
 ## [1.2.0] - 2026-03-19
 
 ### Added
