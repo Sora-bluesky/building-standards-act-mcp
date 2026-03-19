@@ -133,7 +133,14 @@ async function parseXlsx(buffer: ArrayBuffer): Promise<string[][]> {
 
 /**
  * Extract all shared strings from xl/sharedStrings.xml.
- * Each <t> tag contains one string value.
+ *
+ * Each <si> element represents one shared string entry. An entry may contain:
+ * - A simple <t> tag: <si><t>text</t></si>
+ * - Rich text with multiple <r> runs: <si><r><t>part1</t></r><r><t>part2</t></r></si>
+ * - Phonetic readings in <rPh> tags: <si><t>text</t><rPh><t>reading</t></rPh></si>
+ *
+ * The <rPh> (ruby/phonetic) tags must be stripped BEFORE extracting <t> values,
+ * otherwise their <t> children inflate the string count and shift all indices.
  */
 async function readSharedStrings(zip: JSZip): Promise<string[]> {
   const ssFile = zip.file("xl/sharedStrings.xml");
@@ -143,11 +150,20 @@ async function readSharedStrings(zip: JSZip): Promise<string[]> {
   const ssXml = await ssFile.async("text");
 
   const strings: string[] = [];
-  // Match <t> tags, including those with xml:space attribute
-  const tagRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
-  let tagMatch: RegExpExecArray | null;
-  while ((tagMatch = tagRegex.exec(ssXml)) !== null) {
-    strings.push(tagMatch[1]);
+  const siRegex = /<si>([\s\S]*?)<\/si>/g;
+  const rPhRegex = /<rPh[\s\S]*?<\/rPh>/g;
+  const tRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+
+  let siMatch: RegExpExecArray | null;
+  while ((siMatch = siRegex.exec(ssXml)) !== null) {
+    // Strip phonetic reading elements before extracting text
+    const cleaned = siMatch[1].replace(rPhRegex, "");
+    let text = "";
+    let tMatch: RegExpExecArray | null;
+    while ((tMatch = tRegex.exec(cleaned)) !== null) {
+      text += tMatch[1];
+    }
+    strings.push(text);
   }
   return strings;
 }
