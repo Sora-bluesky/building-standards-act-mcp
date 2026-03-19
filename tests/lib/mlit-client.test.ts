@@ -406,6 +406,78 @@ describe("mlit-client", () => {
       expect(results[0].title).toBe("有効な告示");
     });
 
+    it("handles shared strings with phonetic readings (rPh elements)", async () => {
+      vi.resetModules();
+
+      const freshMockFetch = vi.fn();
+      vi.stubGlobal("fetch", freshMockFetch);
+
+      // Build xlsx with raw XML to include <rPh> phonetic readings
+      const zip = new JSZip();
+
+      // SharedStrings with <rPh> elements — these must NOT inflate the index count
+      const ssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="14" uniqueCount="14">
+<si><t>Header</t></si>
+<si><t></t></si>
+<si><t>国空航第626号</t><rPh sb="0" eb="1"><t>コク</t></rPh><rPh sb="1" eb="2"><t>クウ</t></rPh><rPh sb="2" eb="3"><t>コウ</t></rPh><phoneticPr fontId="1"/></si>
+<si><t>耐火構造の構造方法を定める件</t></si>
+<si><t>建設省告示第千三百九十九号</t><rPh sb="0" eb="3"><t>ケンセツショウ</t></rPh><phoneticPr fontId="1"/></si>
+<si><t>36676</t></si>
+<si><t>国土交通省住宅局建築指導課</t><rPh sb="0" eb="5"><t>コクドコウツウショウ</t></rPh><rPh sb="5" eb="8"><t>ジュウタクキョク</t></rPh><phoneticPr fontId="1"/></si>
+<si><t>データのリンクはこちら</t></si>
+<si><t>http://www.mlit.go.jp/notice/noticedata/pdf/correct.pdf</t></si>
+<si><t>不燃材料を定める件</t></si>
+<si><t>建設省告示第千四百号</t></si>
+<si><t>別の組織名</t></si>
+<si><t>リンク</t></si>
+<si><t>http://www.mlit.go.jp/notice/noticedata/pdf/other.pdf</t></si>
+</sst>`;
+      zip.file("xl/sharedStrings.xml", ssXml);
+
+      // Sheet with cells referencing shared string indices
+      // Row 1: header; Row 2: 耐火構造 entry; Row 3: 不燃材料 entry
+      const sheetXml = `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>
+<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>1</v></c><c r="D1" t="s"><v>1</v></c><c r="E1" t="s"><v>1</v></c><c r="F1" t="s"><v>1</v></c></row>
+<row r="2"><c r="A2" t="s"><v>3</v></c><c r="B2" t="s"><v>4</v></c><c r="C2" t="s"><v>5</v></c><c r="D2" t="s"><v>6</v></c><c r="E2" t="s"><v>7</v></c><c r="F2" t="s"><v>8</v></c></row>
+<row r="3"><c r="A3" t="s"><v>9</v></c><c r="B3" t="s"><v>10</v></c><c r="C3" t="s"><v>5</v></c><c r="D3" t="s"><v>11</v></c><c r="E3" t="s"><v>12</v></c><c r="F3" t="s"><v>13</v></c></row>
+</sheetData>
+</worksheet>`;
+      zip.file("xl/worksheets/sheet1.xml", sheetXml);
+
+      const xlsxBuffer = await zip.generateAsync({ type: "arraybuffer" });
+
+      freshMockFetch.mockImplementation(async (url: string) => {
+        if (typeof url === "string" && url.endsWith(".xlsx")) {
+          return {
+            ok: true,
+            arrayBuffer: () => Promise.resolve(xlsxBuffer),
+          };
+        }
+        return {
+          ok: true,
+          text: () => Promise.resolve(MOCK_NOTICE_HTML),
+        };
+      });
+
+      const { findKokujiPdfUrl: freshFn, searchMlitNotices: freshSearch } =
+        await import("../../src/lib/mlit-client.js");
+
+      // Without the rPh fix, index 3 would resolve to "コウ" (a phonetic fragment)
+      // instead of "耐火構造の構造方法を定める件"
+      const result = await freshFn("耐火構造の構造方法を定める件");
+      expect(result).toBe(
+        "http://www.mlit.go.jp/notice/noticedata/pdf/correct.pdf",
+      );
+
+      // Verify search also works correctly with phonetic strings present
+      const searchResults = await freshSearch("不燃材料");
+      expect(searchResults).toHaveLength(1);
+      expect(searchResults[0].title).toBe("不燃材料を定める件");
+    });
+
     it("extracts Excel URL from relative href with leading slash", async () => {
       vi.resetModules();
 

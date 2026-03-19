@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-03-19
+
+### Fixed
+
+- **get_kokuji: SharedStrings parser phonetic reading bug** — `readSharedStrings()` matched all `<t>` tags including those inside `<rPh>` (phonetic reading/ruby) elements, inflating the shared string array by 1,177 entries and causing all cell-to-string index lookups to return wrong values. Kokuji titles were mapped to unrelated PDF URLs. Fixed by parsing `<si>` elements individually and stripping `<rPh>` before extracting text.
+
+### Changed
+
+- Tests expanded: 379 → 380 across 29 test files
+
 ## [1.1.0] - 2026-03-19
 
 ### Fixed
