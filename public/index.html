@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>building-standards-act-mcp</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #fafafa;
+        color: #333;
+        line-height: 1.6;
+        padding: 2rem 1rem;
+      }
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .description {
+        color: #666;
+        margin-bottom: 2rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 1.5rem 0 0.75rem;
+        color: #555;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #e5e5e5;
+      }
+      th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #888;
+      }
+      td {
+        font-size: 0.9rem;
+      }
+      code {
+        background: #f0f0f0;
+        padding: 0.15rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.85rem;
+      }
+      a {
+        color: #0969da;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .footer {
+        margin-top: 2rem;
+        font-size: 0.8rem;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>building-standards-act-mcp</h1>
+      <p class="description">
+        建築法規 MCP サーバー — e-Gov 法令 API から条文をリアルタイム取得し、AI
+        のハルシネーションを防止します。
+      </p>
+
+      <h2>API エンドポイント</h2>
+      <table>
+        <tr>
+          <th>エンドポイント</th>
+          <th>用途</th>
+        </tr>
+        <tr>
+          <td><code>/api/mcp</code></td>
+          <td>MCP over HTTP（Claude.ai / Gemini CLI）</td>
+        </tr>
+        <tr>
+          <td><code>/api/tools/{name}</code></td>
+          <td>REST API（ChatGPT Actions）</td>
+        </tr>
+        <tr>
+          <td><code>/api/openapi.json</code></td>
+          <td>OpenAPI 3.1 スキーマ</td>
+        </tr>
+      </table>
+
+      <h2>セットアップガイド</h2>
+      <p>
+        <a
+          href="https://github.com/Sora-bluesky/building-standards-act-mcp#readme"
+        >
+          GitHub README
+        </a>
+        に ChatGPT / Claude.ai / Gemini CLI / Claude Desktop
+        の設定方法を掲載しています。
+      </p>
+
+      <div class="footer">
+        <a href="https://github.com/Sora-bluesky/building-standards-act-mcp"
+          >GitHub</a
+        >
+        &middot;
+        <a href="https://www.npmjs.com/package/building-standards-act-mcp"
+          >npm</a
+        >
+        &middot; MIT License
+      </div>
+    </div>
+  </body>
+</html>
