@@ -14,11 +14,11 @@ const schema = {
 export function registerSearchLawTool(server: McpServer): void {
   server.tool(
     "search_law",
-    "キーワードで建築関連法令を横断検索する。プリセット法令とe-Gov APIの両方を検索する。",
+    "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。",
     schema,
     async ({ keyword }) => {
       try {
-        // Search presets first
+        // Search aliases first
         const presetResults = registry.search(keyword);
 
         // Also search e-Gov API
@@ -27,7 +27,7 @@ export function registerSearchLawTool(server: McpServer): void {
         const lines: string[] = [];
 
         if (presetResults.length > 0) {
-          lines.push("■ プリセット法令の検索結果:");
+          lines.push("■ 登録済み法令の検索結果:");
           for (const p of presetResults) {
             const abbrevStr =
               p.abbrev.length > 0 ? `（${p.abbrev.join("、")}）` : "";

@@ -1,62 +1,63 @@
-import type { LawPreset } from "./types.js";
-import { ALL_LAW_PRESETS } from "../data/law-presets/index.js";
+import type { LawAlias } from "./types.js";
+import { ALL_LAW_ALIASES } from "../data/law-aliases.js";
 
 /**
- * Registry for looking up pre-verified law presets by name, abbreviation,
- * group, or keyword. All law_id values have been verified against the
- * e-Gov API v2 search endpoint with exact title match.
+ * Registry for looking up law aliases by name, abbreviation, group, or keyword.
  *
- * Preset data is maintained in src/data/law-presets/ (chapter-based files).
+ * This is an abbreviation map — it does NOT contain law_id values.
+ * Law IDs are resolved dynamically via e-Gov API search (see law-resolver.ts).
+ *
+ * Alias data is maintained in src/data/law-aliases.ts.
  */
 export class LawRegistry {
-  private readonly presets: LawPreset[];
+  private readonly aliases: LawAlias[];
 
   constructor() {
-    this.presets = ALL_LAW_PRESETS;
+    this.aliases = ALL_LAW_ALIASES;
   }
 
   /**
-   * Find a single law by exact title or abbreviation.
+   * Find a single alias by exact title or abbreviation.
    * Falls back to partial match if no exact/abbreviation match is found.
    */
-  findByName(name: string): LawPreset | undefined {
+  findByName(name: string): LawAlias | undefined {
     // Exact match on title
-    const exact = this.presets.find((p) => p.title === name);
+    const exact = this.aliases.find((a) => a.title === name);
     if (exact) return exact;
 
     // Abbreviation match
-    const abbr = this.presets.find((p) => p.abbrev.some((a) => a === name));
+    const abbr = this.aliases.find((a) => a.abbrev.some((ab) => ab === name));
     if (abbr) return abbr;
 
     // Partial match
-    return this.presets.find(
-      (p) => p.title.includes(name) || name.includes(p.title),
+    return this.aliases.find(
+      (a) => a.title.includes(name) || name.includes(a.title),
     );
   }
 
   /**
-   * Search presets by keyword across title, abbreviations, and group.
+   * Search aliases by keyword across title, abbreviations, and group.
    */
-  search(keyword: string): LawPreset[] {
-    return this.presets.filter(
-      (p) =>
-        p.title.includes(keyword) ||
-        p.abbrev.some((a) => a.includes(keyword)) ||
-        p.group.includes(keyword),
+  search(keyword: string): LawAlias[] {
+    return this.aliases.filter(
+      (a) =>
+        a.title.includes(keyword) ||
+        a.abbrev.some((ab) => ab.includes(keyword)) ||
+        a.group.includes(keyword),
     );
   }
 
   /**
-   * Get all presets belonging to a specific chapter group.
+   * Get all aliases belonging to a specific chapter group.
    */
-  getByGroup(group: string): LawPreset[] {
-    return this.presets.filter((p) => p.group.includes(group));
+  getByGroup(group: string): LawAlias[] {
+    return this.aliases.filter((a) => a.group.includes(group));
   }
 
   /**
-   * Get a defensive copy of all presets.
+   * Get a defensive copy of all aliases.
    */
-  getAll(): LawPreset[] {
-    return [...this.presets];
+  getAll(): LawAlias[] {
+    return [...this.aliases];
   }
 }

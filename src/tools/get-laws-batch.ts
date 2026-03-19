@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LawRegistry } from "../lib/law-registry.js";
+import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
 import { formatArticleRef } from "../lib/errors.js";
@@ -9,8 +9,6 @@ import type {
   BatchFetchResult,
   EgovLawDataResponse,
 } from "../lib/types.js";
-
-const registry = new LawRegistry();
 
 const MAX_REQUESTS = 20;
 
@@ -62,28 +60,29 @@ export function registerGetLawsBatchTool(server: McpServer): void {
 
         // Group requests by law_name to minimize API calls
         const lawDataMap = new Map<string, EgovLawDataResponse | null>();
-        const presetMap = new Map<
+        const resolvedMap = new Map<
           string,
-          { title: string; law_num: string } | null
+          { title: string; law_num: string; source: string } | null
         >();
 
         for (const req of requests) {
           if (lawDataMap.has(req.law_name)) continue;
 
-          const preset = registry.findByName(req.law_name);
-          if (!preset) {
+          const resolved = await resolveLawId(req.law_name);
+          if (!resolved) {
             lawDataMap.set(req.law_name, null);
-            presetMap.set(req.law_name, null);
+            resolvedMap.set(req.law_name, null);
             continue;
           }
 
-          presetMap.set(req.law_name, {
-            title: preset.title,
-            law_num: preset.law_num,
+          resolvedMap.set(req.law_name, {
+            title: resolved.title,
+            law_num: resolved.law_num,
+            source: resolved.source,
           });
 
           try {
-            const data = await getLawData(preset.law_id);
+            const data = await getLawData(resolved.law_id);
             lawDataMap.set(req.law_name, data);
           } catch {
             lawDataMap.set(req.law_name, null);
@@ -94,13 +93,13 @@ export function registerGetLawsBatchTool(server: McpServer): void {
         const results: BatchFetchItem[] = [];
 
         for (const req of requests) {
-          const preset = presetMap.get(req.law_name);
-          if (!preset) {
+          const resolvedInfo = resolvedMap.get(req.law_name);
+          if (!resolvedInfo) {
             results.push({
               law_name: req.law_name,
               article_number: req.article_number,
               status: "law_not_found",
-              error_message: `法令「${req.law_name}」がプリセットに見つかりませんでした。`,
+              error_message: `法令「${req.law_name}」が見つかりませんでした。`,
             });
             continue;
           }
@@ -124,14 +123,14 @@ export function registerGetLawsBatchTool(server: McpServer): void {
               );
               if (!structured) {
                 results.push({
-                  law_name: preset.title,
+                  law_name: resolvedInfo.title,
                   article_number: req.article_number,
                   status: "article_not_found",
-                  error_message: `${preset.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
+                  error_message: `${resolvedInfo.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
                 });
               } else {
                 results.push({
-                  law_name: preset.title,
+                  law_name: resolvedInfo.title,
                   article_number: req.article_number,
                   status: "success",
                   structured,
@@ -144,14 +143,14 @@ export function registerGetLawsBatchTool(server: McpServer): void {
               );
               if (!article) {
                 results.push({
-                  law_name: preset.title,
+                  law_name: resolvedInfo.title,
                   article_number: req.article_number,
                   status: "article_not_found",
-                  error_message: `${preset.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
+                  error_message: `${resolvedInfo.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
                 });
               } else {
                 results.push({
-                  law_name: preset.title,
+                  law_name: resolvedInfo.title,
                   article_number: req.article_number,
                   status: "success",
                   text: article.text,
@@ -160,7 +159,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
             }
           } catch (error) {
             results.push({
-              law_name: preset.title,
+              law_name: resolvedInfo.title,
               article_number: req.article_number,
               status: "error",
               error_message:

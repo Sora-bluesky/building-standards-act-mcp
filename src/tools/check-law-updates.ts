@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LawRegistry } from "../lib/law-registry.js";
+import { resolveLawId } from "../lib/law-resolver.js";
 import {
   checkLawUpdate,
   checkLawUpdates,
@@ -31,24 +32,24 @@ const schema = {
 };
 
 function formatSummary(results: LawUpdateCheckResult[]): string {
-  const updated = results.filter((r) => r.status === "updated");
+  const hasRevisions = results.filter((r) => r.status === "has_revisions");
   const repealed = results.filter((r) => r.status === "repealed");
   const errors = results.filter((r) => r.status === "error");
-  const upToDate = results.filter((r) => r.status === "up_to_date");
+  const current = results.filter((r) => r.status === "current");
 
   const lines: string[] = [];
   lines.push("## 法令改正チェック結果\n");
   lines.push(`- チェック対象: ${results.length}件`);
-  lines.push(`- 最新: ${upToDate.length}件`);
-  if (updated.length > 0) lines.push(`- **更新検出: ${updated.length}件**`);
+  lines.push(`- 最新: ${current.length}件`);
+  if (hasRevisions.length > 0)
+    lines.push(`- **改正あり: ${hasRevisions.length}件**`);
   if (repealed.length > 0) lines.push(`- **廃止検出: ${repealed.length}件**`);
   if (errors.length > 0) lines.push(`- エラー: ${errors.length}件`);
 
-  if (updated.length > 0) {
-    lines.push("\n### 更新検出\n");
-    for (const r of updated) {
+  if (hasRevisions.length > 0) {
+    lines.push("\n### 改正あり\n");
+    for (const r of hasRevisions) {
       lines.push(`- **${r.title}** (${r.law_id})`);
-      lines.push(`  - 最終検証日: ${r.verified_at}`);
       if (r.latest_amendment_date) {
         lines.push(`  - 最新改正公布日: ${r.latest_amendment_date}`);
       }
@@ -82,7 +83,6 @@ function formatHistory(result: LawUpdateCheckResult): string {
   const lines: string[] = [];
   lines.push(`## ${result.title} 改正履歴\n`);
   lines.push(`- 法令ID: ${result.law_id}`);
-  lines.push(`- 検証日: ${result.verified_at}`);
   lines.push(`- 状態: ${result.status}\n`);
 
   if (result.revisions && result.revisions.length > 0) {
@@ -111,27 +111,27 @@ function formatHistory(result: LawUpdateCheckResult): string {
 export function registerCheckLawUpdatesTool(server: McpServer): void {
   server.tool(
     "check_law_updates",
-    "法令プリセットの改正状況をe-Gov APIで確認する。法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示が可能。",
+    "法令の改正状況をe-Gov APIで確認する。法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示が可能。",
     schema,
     async ({ law_name, group, show_history }) => {
       try {
         // Single law check with optional history
         if (law_name) {
-          const preset = registry.findByName(law_name);
-          if (!preset) {
+          const resolved = await resolveLawId(law_name);
+          if (!resolved) {
             return {
               content: [
                 {
                   type: "text" as const,
-                  text: `法令「${law_name}」がプリセットに見つかりませんでした。`,
+                  text: `法令「${law_name}」が見つかりませんでした。`,
                 },
               ],
             };
           }
 
           const result = show_history
-            ? await getLawRevisionHistory(preset)
-            : await checkLawUpdate(preset);
+            ? await getLawRevisionHistory(resolved)
+            : await checkLawUpdate(resolved);
 
           const text = show_history
             ? formatHistory(result)
@@ -141,16 +141,25 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
         }
 
         // Batch check (group or all)
-        const presets = group ? registry.getByGroup(group) : registry.getAll();
+        const aliases = group ? registry.getByGroup(group) : registry.getAll();
 
-        if (presets.length === 0) {
+        if (aliases.length === 0) {
           const msg = group
-            ? `グループ「${group}」に該当するプリセットが見つかりませんでした。`
-            : "プリセットが登録されていません。";
+            ? `グループ「${group}」に該当する法令が見つかりませんでした。`
+            : "登録済み法令がありません。";
           return { content: [{ type: "text" as const, text: msg }] };
         }
 
-        const results = await checkLawUpdates(presets);
+        // Resolve each alias to get law_id
+        const resolvedLaws = [];
+        for (const alias of aliases) {
+          const resolved = await resolveLawId(alias.title);
+          if (resolved) {
+            resolvedLaws.push(resolved);
+          }
+        }
+
+        const results = await checkLawUpdates(resolvedLaws);
         const text = formatSummary(results);
 
         return { content: [{ type: "text" as const, text }] };

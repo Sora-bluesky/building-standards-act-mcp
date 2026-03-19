@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-19
+
+### Added
+
+- **検索ファースト・アーキテクチャ**: e-Gov API 検索による動的な法令解決。プリセットに登録されていない法令も条文を取得可能に
+- **省エネ告示 PDF 直接取得**: 告示第265号（省エネ算出方法告示）・第266号（住宅外皮基準告示）を国交省 PDF から直接取得
+- **法令リゾルバー** (`resolveLawId`): 略称展開 → e-Gov API 検索を一括で行う共通関数を追加
+
+### Changed
+
+- 法令プリセット（112件）を略称マップに簡素化。`law_id`, `law_num`, `tier`, `verified_at` を除去し、`title`, `abbrev`, `group` のみ保持
+- `KokujiPreset` に `pdf_url` オプショナルフィールドを追加
+- `get_law`, `get_full_law`, `get_laws_batch` が `resolveLawId()` を使用するように変更
+- `check_law_updates` が `ResolvedLaw` ベースに移行
+
+### Removed
+
+- `validate_presets` ツールを廃止（法令プリセットに `law_id` がなくなったため不要）
+- `src/data/law-presets/` ディレクトリ（11チャプターファイル）を `src/data/law-aliases.ts` に統合
+
 ## [1.1.2] - 2026-03-19
 
 ### Fixed
@@ -146,6 +166,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated npm publish and GitHub Release via release.yml
 - Unit and integration tests (107 tests, 92.45% coverage)
 
+[1.2.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.2.0
+[1.1.2]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.1.2
+[1.1.1]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.1.0
 [1.0.1]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.0.0

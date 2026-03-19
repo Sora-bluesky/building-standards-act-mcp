@@ -1,11 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LawRegistry } from "../lib/law-registry.js";
+import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
-
-const registry = new LawRegistry();
 
 const schema = {
   law_name: z
@@ -27,12 +25,12 @@ export function registerGetLawTool(server: McpServer): void {
     schema,
     async ({ law_name, article_number, format }) => {
       try {
-        const preset = registry.findByName(law_name);
-        if (!preset) {
+        const resolved = await resolveLawId(law_name);
+        if (!resolved) {
           throw new LawNotFoundError(law_name);
         }
 
-        const lawData = await getLawData(preset.law_id);
+        const lawData = await getLawData(resolved.law_id);
 
         if (format === "structured") {
           const structured = parseArticleStructured(
@@ -41,15 +39,19 @@ export function registerGetLawTool(server: McpServer): void {
           );
 
           if (!structured) {
-            throw new ArticleNotFoundError(article_number, preset.title);
+            throw new ArticleNotFoundError(article_number, resolved.title);
           }
 
-          const response = {
-            law_title: preset.title,
-            law_num: preset.law_num,
+          const response: Record<string, unknown> = {
+            law_title: resolved.title,
+            law_num: resolved.law_num,
             source: "e-Gov法令検索",
             article: structured,
           };
+          if (resolved.source === "egov_search") {
+            response.note =
+              "この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。";
+          }
 
           return {
             content: [
@@ -65,11 +67,11 @@ export function registerGetLawTool(server: McpServer): void {
         const article = parseArticle(lawData.law_full_text, article_number);
 
         if (!article) {
-          throw new ArticleNotFoundError(article_number, preset.title);
+          throw new ArticleNotFoundError(article_number, resolved.title);
         }
 
         const lines = [
-          `【${preset.title}】${article.article_title}`,
+          `【${resolved.title}】${article.article_title}`,
           article.article_caption ? article.article_caption : "",
           "",
           article.text,
@@ -92,7 +94,12 @@ export function registerGetLawTool(server: McpServer): void {
         }
 
         lines.push("");
-        lines.push(`出典: e-Gov法令検索（法令番号: ${preset.law_num}）`);
+        lines.push(`出典: e-Gov法令検索（法令番号: ${resolved.law_num}）`);
+        if (resolved.source === "egov_search") {
+          lines.push(
+            "※ この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",
+          );
+        }
         const text = lines.join("\n");
 
         return { content: [{ type: "text" as const, text }] };

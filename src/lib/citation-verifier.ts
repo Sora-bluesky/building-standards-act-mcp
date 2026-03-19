@@ -1,10 +1,8 @@
 import { getLawData } from "./egov-client.js";
 import { parseArticle } from "./egov-parser.js";
 import { formatArticleRef } from "./errors.js";
-import { LawRegistry } from "./law-registry.js";
+import { resolveLawId } from "./law-resolver.js";
 import type { CitationVerification } from "./types.js";
-
-const registry = new LawRegistry();
 
 const MAX_PREVIEW_LENGTH = 200;
 
@@ -96,32 +94,32 @@ export async function verifyCitation(
   claimedText?: string,
 ): Promise<CitationVerification> {
   try {
-    const preset = registry.findByName(lawName);
-    if (!preset) {
+    const resolved = await resolveLawId(lawName);
+    if (!resolved) {
       return {
         law_name: lawName,
         article_number: articleNumber,
         status: "law_not_found",
-        error_message: `法令「${lawName}」がプリセットに見つかりませんでした。`,
+        error_message: `法令「${lawName}」が見つかりませんでした。`,
       };
     }
 
-    const lawData = await getLawData(preset.law_id);
+    const lawData = await getLawData(resolved.law_id);
     const article = parseArticle(lawData.law_full_text, articleNumber);
 
     if (!article) {
       return {
-        law_name: preset.title,
+        law_name: resolved.title,
         article_number: articleNumber,
         status: "article_not_found",
-        error_message: `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
+        error_message: `${resolved.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
       };
     }
 
     // If no claimed text, just verify existence
     if (!claimedText || claimedText.trim() === "") {
       return {
-        law_name: preset.title,
+        law_name: resolved.title,
         article_number: articleNumber,
         status: "verified",
         actual_text: truncate(article.text, MAX_PREVIEW_LENGTH),
@@ -133,7 +131,7 @@ export async function verifyCitation(
 
     if (score >= 0.8) {
       return {
-        law_name: preset.title,
+        law_name: resolved.title,
         article_number: articleNumber,
         status: "verified",
         match_score: Math.round(score * 100) / 100,
@@ -142,7 +140,7 @@ export async function verifyCitation(
     }
 
     return {
-      law_name: preset.title,
+      law_name: resolved.title,
       article_number: articleNumber,
       status: "mismatch",
       match_score: Math.round(score * 100) / 100,

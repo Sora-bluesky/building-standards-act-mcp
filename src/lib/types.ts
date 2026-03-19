@@ -57,8 +57,7 @@ export interface EgovLawRevisionsResponse {
 export interface LawUpdateCheckResult {
   title: string;
   law_id: string;
-  status: "up_to_date" | "updated" | "repealed" | "error";
-  verified_at: string;
+  status: "current" | "has_revisions" | "repealed" | "error";
   latest_amendment_date?: string;
   latest_amendment_law?: string;
   revisions?: EgovRevisionInfo[];
@@ -127,15 +126,19 @@ export interface StructuredArticle {
   references?: ArticleReference[];
 }
 
-// Law preset entry
-export interface LawPreset {
+// Law alias entry (abbreviation map for e-Gov search)
+export interface LawAlias {
+  title: string; // Official name (used as e-Gov search key)
+  abbrev: string[]; // Abbreviations (e.g. ["建基法", "基準法"])
+  group: string; // Category (e.g. "1章 総則") for search display
+}
+
+// Resolved law from e-Gov API search
+export interface ResolvedLaw {
   law_id: string;
-  law_num: string;
   title: string;
-  abbrev: string[];
-  group: string;
-  tier: "Act" | "CabinetOrder" | "MinisterialOrdinance" | "Other";
-  verified_at: string; // ISO date string, e.g. "2026-03-17"
+  law_num: string;
+  source: "alias" | "egov_search";
 }
 
 // Batch fetch result
@@ -191,7 +194,6 @@ export interface RelatedLawSuggestion {
   }>;
   same_group_laws: Array<{
     law_name: string;
-    law_id: string;
   }>;
 }
 
@@ -231,4 +233,5 @@ export interface KokujiPreset {
   title: string;
   abbrev: string[];
   delegated_by: string;
+  pdf_url?: string; // Direct PDF URL for kokuji not in MLIT Excel
 }

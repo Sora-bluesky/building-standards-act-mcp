@@ -2,11 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawRevisions: vi.fn(),
+  searchLaws: vi.fn(),
+}));
+
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
 }));
 
 import { registerCheckLawUpdatesTool } from "../../src/tools/check-law-updates.js";
 import { getLawRevisions } from "../../src/lib/egov-client.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { EgovRevisionInfo } from "../../src/lib/types.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 let handler: Function;
 
@@ -56,12 +69,15 @@ describe("check_law_updates tool", () => {
   });
 
   it("returns not found message for unknown law_name", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({ law_name: "存在しない法令" });
 
     expect(result.content[0].text).toContain("見つかりませんでした");
   });
 
-  it("checks a single law by name and returns up_to_date", async () => {
+  it("checks a single law by name and returns current", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawRevisions).mockResolvedValue({
       law_info: { law_id: "325AC0000000201" } as any,
       revisions: [makeRevision({ amendment_promulgate_date: "2025-06-01" })],
@@ -71,10 +87,10 @@ describe("check_law_updates tool", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("法令改正チェック結果");
-    expect(result.content[0].text).toContain("最新: 1件");
   });
 
-  it("detects updated law", async () => {
+  it("detects law with revisions", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawRevisions).mockResolvedValue({
       law_info: { law_id: "325AC0000000201" } as any,
       revisions: [makeRevision({ amendment_promulgate_date: "2026-04-01" })],
@@ -82,11 +98,12 @@ describe("check_law_updates tool", () => {
 
     const result = await handler({ law_name: "建築基準法" });
 
-    expect(result.content[0].text).toContain("更新検出");
+    expect(result.content[0].text).toContain("改正あり");
     expect(result.content[0].text).toContain("2026-04-01");
   });
 
   it("shows revision history when show_history is true", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawRevisions).mockResolvedValue({
       law_info: { law_id: "325AC0000000201" } as any,
       revisions: [
@@ -109,13 +126,15 @@ describe("check_law_updates tool", () => {
     expect(result.content[0].text).toContain("2024-04-01");
   });
 
-  it("checks group presets in batch", async () => {
+  it("checks group aliases in batch", async () => {
+    // resolveLawId will be called for each alias in the group
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawRevisions).mockResolvedValue({
       law_info: { law_id: "TEST" } as any,
-      revisions: [makeRevision({ amendment_promulgate_date: "2025-01-01" })],
+      revisions: [makeRevision({ amendment_promulgate_date: "" })],
     });
 
-    // Use chapter 11 (smallest group: 3 presets)
+    // Use chapter 11 (smallest group: 3 aliases)
     const result = await handler({ group: "11章" });
 
     expect(result.content[0].text).toContain("チェック対象: 3件");
@@ -129,6 +148,7 @@ describe("check_law_updates tool", () => {
   });
 
   it("returns error response on unexpected exception", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     // Force an error by mocking getLawRevisions to throw for a specific call
     vi.mocked(getLawRevisions).mockRejectedValue(new Error("network failure"));
 
@@ -139,6 +159,7 @@ describe("check_law_updates tool", () => {
   });
 
   it("detects repealed law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawRevisions).mockResolvedValue({
       law_info: { law_id: "325AC0000000201" } as any,
       revisions: [

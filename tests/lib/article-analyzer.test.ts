@@ -2,16 +2,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawData: vi.fn(),
+  searchLaws: vi.fn(),
 }));
 
 vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticleStructured: vi.fn(),
 }));
 
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
+
 import { analyzeArticle } from "../../src/lib/article-analyzer.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseArticleStructured } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { StructuredArticle } from "../../src/lib/types.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 const MOCK_LAW_DATA = {
   law_full_text: { tag: "Law", children: [] },
@@ -74,12 +87,15 @@ describe("analyzeArticle", () => {
   });
 
   it("throws for unknown law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     await expect(analyzeArticle("存在しない法律", "1")).rejects.toThrow(
       "見つかりませんでした",
     );
   });
 
   it("throws for non-existent article", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(null);
 
@@ -89,6 +105,7 @@ describe("analyzeArticle", () => {
   });
 
   it("returns complete analysis for a structured article", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
@@ -101,6 +118,7 @@ describe("analyzeArticle", () => {
   });
 
   it("counts structure correctly", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
@@ -113,6 +131,7 @@ describe("analyzeArticle", () => {
   });
 
   it("generates paragraph summaries", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
@@ -125,6 +144,7 @@ describe("analyzeArticle", () => {
   });
 
   it("summarizes references correctly", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
@@ -140,6 +160,7 @@ describe("analyzeArticle", () => {
   });
 
   it("handles article with no references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ references: undefined }),
@@ -152,6 +173,7 @@ describe("analyzeArticle", () => {
   });
 
   it("strips parentheses from caption", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ article_caption: "（目的）" }),
@@ -162,6 +184,7 @@ describe("analyzeArticle", () => {
   });
 
   it("handles empty caption", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ article_caption: "" }),
@@ -172,6 +195,7 @@ describe("analyzeArticle", () => {
   });
 
   it("includes structured_data in result", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     const article = makeStructuredArticle();
     vi.mocked(parseArticleStructured).mockReturnValue(article);

@@ -97,7 +97,7 @@ describe("search_law tool", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].type).toBe("text");
     // Preset results section
-    expect(result.content[0].text).toContain("プリセット法令の検索結果");
+    expect(result.content[0].text).toContain("登録済み法令の検索結果");
     expect(result.content[0].text).toContain("建築基準法");
     // API results section
     expect(result.content[0].text).toContain("e-Gov API検索結果");

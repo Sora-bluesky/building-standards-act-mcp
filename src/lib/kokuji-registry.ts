@@ -69,6 +69,7 @@ const ALL_KOKUJI_PRESETS: KokujiPreset[] = [
       "建築物エネルギー消費性能基準等を定める省令における算出方法等に係る事項",
     abbrev: ["省エネ算出方法告示", "UA値算出告示"],
     delegated_by: "建築物エネルギー消費性能基準等を定める省令",
+    pdf_url: "https://www.mlit.go.jp/common/001880627.pdf",
   },
   {
     law_id: "",
@@ -77,6 +78,7 @@ const ALL_KOKUJI_PRESETS: KokujiPreset[] = [
       "住宅部分の外壁、窓等を通しての熱の損失の防止に関する基準及び一次エネルギー消費量に関する基準",
     abbrev: ["断熱等性能等級告示", "住宅外皮基準告示"],
     delegated_by: "住宅の品質確保の促進等に関する法律",
+    pdf_url: "https://www.mlit.go.jp/common/001880628.pdf",
   },
 ];
 

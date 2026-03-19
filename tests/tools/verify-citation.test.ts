@@ -2,15 +2,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawData: vi.fn(),
+  searchLaws: vi.fn(),
 }));
 
 vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
 }));
 
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
+
 import { registerVerifyCitationTool } from "../../src/tools/verify-citation.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 let handler: Function;
 
@@ -65,6 +78,7 @@ describe("verify_citation tool", () => {
   });
 
   it("verifies existing article without claimed_text", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -80,6 +94,7 @@ describe("verify_citation tool", () => {
   });
 
   it("detects mismatch for wrong claimed_text", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -99,6 +114,8 @@ describe("verify_citation tool", () => {
   });
 
   it("reports law_not_found", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({
       citations: [{ law_name: "存在しない法律", article_number: "1" }],
     });
@@ -109,6 +126,7 @@ describe("verify_citation tool", () => {
   });
 
   it("verifies multiple citations in one call", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle)
       .mockReturnValueOnce(MOCK_ARTICLE as any)

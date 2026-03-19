@@ -1,5 +1,5 @@
 import { getLawRevisions } from "./egov-client.js";
-import type { LawPreset, LawUpdateCheckResult } from "./types.js";
+import type { ResolvedLaw, LawUpdateCheckResult } from "./types.js";
 
 const RATE_LIMIT_DELAY_MS = 500;
 
@@ -8,22 +8,20 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Check if a single law preset has been updated since its last verification.
- * Compares the latest revision's amendment_promulgate_date against preset.verified_at.
+ * Check if a single resolved law has revisions or has been repealed.
  */
 export async function checkLawUpdate(
-  preset: LawPreset,
+  resolved: ResolvedLaw,
 ): Promise<LawUpdateCheckResult> {
   try {
-    const response = await getLawRevisions(preset.law_id);
+    const response = await getLawRevisions(resolved.law_id);
     const revisions = response.revisions;
 
     if (revisions.length === 0) {
       return {
-        title: preset.title,
-        law_id: preset.law_id,
-        status: "up_to_date",
-        verified_at: preset.verified_at,
+        title: resolved.title,
+        law_id: resolved.law_id,
+        status: "current",
       };
     }
 
@@ -33,55 +31,51 @@ export async function checkLawUpdate(
     // Check for repeal
     if (latest.repeal_status !== "" && latest.repeal_status !== "none") {
       return {
-        title: preset.title,
-        law_id: preset.law_id,
+        title: resolved.title,
+        law_id: resolved.law_id,
         status: "repealed",
-        verified_at: preset.verified_at,
         latest_amendment_date: latest.amendment_promulgate_date,
         latest_amendment_law:
           latest.amendment_law_title || latest.amendment_law_num,
       };
     }
 
-    // Compare amendment date against verified_at
+    // Report whether revisions exist
     const amendmentDate = latest.amendment_promulgate_date;
-    const isUpdated =
-      amendmentDate !== "" && amendmentDate > preset.verified_at;
+    const hasRevisions = amendmentDate !== "";
 
     return {
-      title: preset.title,
-      law_id: preset.law_id,
-      status: isUpdated ? "updated" : "up_to_date",
-      verified_at: preset.verified_at,
+      title: resolved.title,
+      law_id: resolved.law_id,
+      status: hasRevisions ? "has_revisions" : "current",
       latest_amendment_date: amendmentDate || undefined,
       latest_amendment_law:
         latest.amendment_law_title || latest.amendment_law_num || undefined,
     };
   } catch (error) {
     return {
-      title: preset.title,
-      law_id: preset.law_id,
+      title: resolved.title,
+      law_id: resolved.law_id,
       status: "error",
-      verified_at: preset.verified_at,
       error_message: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 /**
- * Check multiple presets for updates with rate limiting.
+ * Check multiple resolved laws for updates with rate limiting.
  */
 export async function checkLawUpdates(
-  presets: LawPreset[],
+  resolvedLaws: ResolvedLaw[],
 ): Promise<LawUpdateCheckResult[]> {
   const results: LawUpdateCheckResult[] = [];
 
-  for (let i = 0; i < presets.length; i++) {
-    const result = await checkLawUpdate(presets[i]);
+  for (let i = 0; i < resolvedLaws.length; i++) {
+    const result = await checkLawUpdate(resolvedLaws[i]);
     results.push(result);
 
     // Rate limiting: wait between API calls (skip after the last one)
-    if (i < presets.length - 1) {
+    if (i < resolvedLaws.length - 1) {
       await sleep(RATE_LIMIT_DELAY_MS);
     }
   }
@@ -90,26 +84,28 @@ export async function checkLawUpdates(
 }
 
 /**
- * Get full revision history for a single law.
+ * Get full revision history for a single resolved law.
  */
 export async function getLawRevisionHistory(
-  preset: LawPreset,
+  resolved: ResolvedLaw,
 ): Promise<LawUpdateCheckResult> {
   try {
-    const response = await getLawRevisions(preset.law_id);
+    const response = await getLawRevisions(resolved.law_id);
 
     const latest = response.revisions[0];
     const amendmentDate = latest?.amendment_promulgate_date ?? "";
     const isRepealed =
       latest && latest.repeal_status !== "" && latest.repeal_status !== "none";
-    const isUpdated =
-      !isRepealed && amendmentDate !== "" && amendmentDate > preset.verified_at;
+    const hasRevisions = !isRepealed && amendmentDate !== "";
 
     return {
-      title: preset.title,
-      law_id: preset.law_id,
-      status: isRepealed ? "repealed" : isUpdated ? "updated" : "up_to_date",
-      verified_at: preset.verified_at,
+      title: resolved.title,
+      law_id: resolved.law_id,
+      status: isRepealed
+        ? "repealed"
+        : hasRevisions
+          ? "has_revisions"
+          : "current",
       latest_amendment_date: amendmentDate || undefined,
       latest_amendment_law:
         latest?.amendment_law_title || latest?.amendment_law_num || undefined,
@@ -117,10 +113,9 @@ export async function getLawRevisionHistory(
     };
   } catch (error) {
     return {
-      title: preset.title,
-      law_id: preset.law_id,
+      title: resolved.title,
+      law_id: resolved.law_id,
       status: "error",
-      verified_at: preset.verified_at,
       error_message: error instanceof Error ? error.message : String(error),
     };
   }
