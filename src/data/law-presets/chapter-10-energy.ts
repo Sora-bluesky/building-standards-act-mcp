@@ -1,4 +1,4 @@
-// Verified against e-Gov API v2: 2026-03-17
+// Verified against e-Gov API v2: 2026-03-19
 import type { LawPreset } from "../../lib/types.js";
 
 export const CHAPTER_10_ENERGY: LawPreset[] = [
@@ -118,5 +118,14 @@ export const CHAPTER_10_ENERGY: LawPreset[] = [
     group: "10章 省エネ法・住宅関連法",
     tier: "MinisterialOrdinance",
     verified_at: "2026-03-17",
+  },
+  {
+    law_id: "428M60000C00001",
+    law_num: "平成二十八年経済産業省・国土交通省令第一号",
+    title: "建築物エネルギー消費性能基準等を定める省令",
+    abbrev: ["省エネ基準省令", "エネルギー消費性能基準省令"],
+    group: "10章 省エネ法・住宅関連法",
+    tier: "MinisterialOrdinance",
+    verified_at: "2026-03-19",
   },
 ];

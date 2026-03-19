@@ -62,12 +62,28 @@ const ALL_KOKUJI_PRESETS: KokujiPreset[] = [
     abbrev: ["許容応力度告示"],
     delegated_by: "建築基準法施行令",
   },
+  {
+    law_id: "",
+    law_num: "平成二十八年国土交通省告示第二百六十五号",
+    title:
+      "建築物エネルギー消費性能基準等を定める省令における算出方法等に係る事項",
+    abbrev: ["省エネ算出方法告示", "UA値算出告示"],
+    delegated_by: "建築物エネルギー消費性能基準等を定める省令",
+  },
+  {
+    law_id: "",
+    law_num: "平成二十八年国土交通省告示第二百六十六号",
+    title:
+      "住宅部分の外壁、窓等を通しての熱の損失の防止に関する基準及び一次エネルギー消費量に関する基準",
+    abbrev: ["断熱等性能等級告示", "住宅外皮基準告示"],
+    delegated_by: "住宅の品質確保の促進等に関する法律",
+  },
 ];
 
 /**
  * Registry for looking up kokuji (ministerial notification) presets.
  *
- * Contains 7 major kokuji relevant to building standards law.
+ * Contains 9 major kokuji relevant to building standards law.
  * These are sourced from the MLIT pipeline since e-Gov API v2
  * does not include kokuji in its law search endpoint.
  */
