@@ -2,16 +2,29 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawData: vi.fn(),
+  searchLaws: vi.fn(),
 }));
 
 vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
 }));
 
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
+
 import { findRelatedLaws } from "../../src/lib/related-law-finder.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { ArticleReference } from "../../src/lib/types.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 const MOCK_LAW_DATA = {
   law_full_text: { tag: "Law", children: [] },
@@ -35,12 +48,15 @@ describe("findRelatedLaws", () => {
   });
 
   it("throws for unknown law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     await expect(findRelatedLaws("存在しない法律", "1")).rejects.toThrow(
       "見つかりませんでした",
     );
   });
 
   it("throws for non-existent article", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
@@ -50,6 +66,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("extracts cross_law references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(
       makeArticle([
@@ -71,6 +88,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("extracts delegation references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(
       makeArticle([
@@ -93,6 +111,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("extracts same_law references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(
       makeArticle([
@@ -111,6 +130,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("deduplicates references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(
       makeArticle([
@@ -135,6 +155,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("includes same_group_laws excluding source law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(makeArticle([]) as any);
 
@@ -149,6 +170,7 @@ describe("findRelatedLaws", () => {
   });
 
   it("returns empty arrays for article with no references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(makeArticle([]) as any);
 

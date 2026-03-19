@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawData: vi.fn(),
+  searchLaws: vi.fn(),
 }));
 
 vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
+}));
+
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
 }));
 
 import {
@@ -15,6 +20,14 @@ import {
 } from "../../src/lib/citation-verifier.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 const MOCK_LAW_DATA = {
   law_full_text: { tag: "Law", children: [] },
@@ -90,11 +103,14 @@ describe("verifyCitation", () => {
   });
 
   it("returns law_not_found for unknown law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await verifyCitation("存在しない法律", "1");
     expect(result.status).toBe("law_not_found");
   });
 
   it("returns article_not_found when article does not exist", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
@@ -103,6 +119,7 @@ describe("verifyCitation", () => {
   });
 
   it("returns verified when article exists (no claimed_text)", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -112,6 +129,7 @@ describe("verifyCitation", () => {
   });
 
   it("returns verified when claimed_text matches", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -125,6 +143,7 @@ describe("verifyCitation", () => {
   });
 
   it("returns mismatch for completely wrong text", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -139,6 +158,7 @@ describe("verifyCitation", () => {
   });
 
   it("returns verified for empty claimed_text", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -147,6 +167,7 @@ describe("verifyCitation", () => {
   });
 
   it("returns error on API failure", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockRejectedValue(new Error("timeout"));
 
     const result = await verifyCitation("建築基準法", "20");
@@ -155,6 +176,7 @@ describe("verifyCitation", () => {
   });
 
   it("handles whitespace/punctuation differences as match", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       ...MOCK_ARTICLE,

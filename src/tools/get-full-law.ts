@@ -1,11 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { LawRegistry } from "../lib/law-registry.js";
+import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import { LawNotFoundError } from "../lib/errors.js";
-
-const registry = new LawRegistry();
 
 const schema = {
   law_name: z
@@ -22,22 +20,28 @@ export function registerGetFullLawTool(server: McpServer): void {
     schema,
     async ({ law_name }) => {
       try {
-        const preset = registry.findByName(law_name);
-        if (!preset) {
+        const resolved = await resolveLawId(law_name);
+        if (!resolved) {
           throw new LawNotFoundError(law_name);
         }
 
-        const lawData = await getLawData(preset.law_id);
+        const lawData = await getLawData(resolved.law_id);
         const fullText = parseFullLaw(lawData.law_full_text);
 
-        const text = [
-          `【${preset.title}】全文`,
-          `法令番号: ${preset.law_num}`,
+        const lines = [
+          `【${resolved.title}】全文`,
+          `法令番号: ${resolved.law_num}`,
           "",
           fullText,
           "",
           `出典: e-Gov法令検索`,
-        ].join("\n");
+        ];
+        if (resolved.source === "egov_search") {
+          lines.push(
+            "※ この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",
+          );
+        }
+        const text = lines.join("\n");
 
         return { content: [{ type: "text" as const, text }] };
       } catch (error) {

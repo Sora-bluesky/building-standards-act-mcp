@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawData: vi.fn(),
+  searchLaws: vi.fn(),
 }));
 
 vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
   parseArticleStructured: vi.fn(),
+}));
+
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
 }));
 
 import { registerGetLawsBatchTool } from "../../src/tools/get-laws-batch.js";
@@ -15,7 +20,15 @@ import {
   parseArticle,
   parseArticleStructured,
 } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { BatchFetchResult } from "../../src/lib/types.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 let handler: Function;
 
@@ -78,6 +91,7 @@ describe("get_laws_batch tool", () => {
   });
 
   it("fetches single article successfully", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -97,6 +111,7 @@ describe("get_laws_batch tool", () => {
   });
 
   it("fetches structured format", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(MOCK_STRUCTURED as any);
 
@@ -113,6 +128,7 @@ describe("get_laws_batch tool", () => {
   });
 
   it("groups same law requests into one API call", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
@@ -129,6 +145,8 @@ describe("get_laws_batch tool", () => {
   });
 
   it("returns law_not_found for unknown law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({
       requests: [
         { law_name: "存在しない法律", article_number: "1", format: "text" },
@@ -141,6 +159,7 @@ describe("get_laws_batch tool", () => {
   });
 
   it("returns article_not_found for non-existent article", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
@@ -155,6 +174,9 @@ describe("get_laws_batch tool", () => {
   });
 
   it("handles mixed success and failure", async () => {
+    vi.mocked(resolveLawId)
+      .mockResolvedValueOnce(MOCK_RESOLVED)
+      .mockResolvedValueOnce(null);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle)
       .mockReturnValueOnce(MOCK_ARTICLE as any)
@@ -178,6 +200,7 @@ describe("get_laws_batch tool", () => {
   });
 
   it("handles API error gracefully", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockRejectedValue(new Error("API timeout"));
 
     const result = await handler({

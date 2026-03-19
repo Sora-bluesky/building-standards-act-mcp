@@ -10,6 +10,9 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticleStructured: vi.fn(),
   parseFullLaw: vi.fn(),
 }));
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
 
 import { registerGetLawTool } from "../../src/tools/get-law.js";
 import { getLawData } from "../../src/lib/egov-client.js";
@@ -17,6 +20,14 @@ import {
   parseArticle,
   parseArticleStructured,
 } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 // Capture the handler registered by the tool
 let handler: Function;
@@ -53,6 +64,7 @@ describe("get_law tool", () => {
       text: "建築物は、自重、積載荷重...",
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 
@@ -78,6 +90,8 @@ describe("get_law tool", () => {
   });
 
   it("returns error when law not found in registry", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({
       law_name: "存在しない法律",
       article_number: "第1条",
@@ -94,6 +108,7 @@ describe("get_law tool", () => {
       law_full_text: { tag: "Law", children: [] },
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
@@ -108,6 +123,7 @@ describe("get_law tool", () => {
   });
 
   it("returns error on API failure", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockRejectedValue(
       new Error("e-Gov API returned 500"),
     );
@@ -139,6 +155,7 @@ describe("get_law tool", () => {
       ],
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticleStructured).mockReturnValue(mockStructured);
 
@@ -179,6 +196,7 @@ describe("get_law tool", () => {
       text: "テスト条文",
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 
@@ -200,6 +218,7 @@ describe("get_law tool", () => {
       law_full_text: { tag: "Law", children: [] },
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticleStructured).mockReturnValue(null);
 
@@ -233,6 +252,7 @@ describe("get_law tool", () => {
       ],
     };
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 

@@ -41,14 +41,15 @@ npm test
 - **ユニットテスト**: `tests/` 直下
 - **統合テスト**: `tests/integration/`
 
-## 法令プリセットの追加
+## 略称マップへの法令追加
 
-新しい法令を追加する場合:
+新しい法令の略称を追加する場合:
 
-1. [e-Gov 法令検索](https://laws.e-gov.go.jp/) で law_id を確認
-2. `src/lib/law-registry.ts` にエントリを追加
-3. `scripts/verified-law-ids.json` に law_id を追加
-4. テストを追加して `npm test` で確認
+1. [e-Gov 法令検索](https://laws.e-gov.go.jp/) で正式名称を確認
+2. `src/data/law-aliases.ts` にエントリを追加（`title`, `abbrev`, `group`）
+3. テストを追加して `npm test` で確認
+
+> **注意**: `law_id` の登録は不要です。法令名から e-Gov API 検索で動的に解決されます。
 
 ## ブランチ戦略
 

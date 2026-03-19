@@ -11,16 +11,15 @@ describe("tool-invoker", () => {
   });
 
   describe("listTools", () => {
-    it("returns all 11 registered tools", async () => {
+    it("returns all 10 registered tools", async () => {
       const tools = await listTools();
-      expect(tools.length).toBe(11);
+      expect(tools.length).toBe(10);
 
       const names = tools.map((t) => t.name);
       expect(names).toContain("get_law");
       expect(names).toContain("get_full_law");
       expect(names).toContain("search_law");
       expect(names).toContain("get_kokuji");
-      expect(names).toContain("validate_presets");
       expect(names).toContain("check_law_updates");
       expect(names).toContain("get_laws_batch");
       expect(names).toContain("verify_citation");

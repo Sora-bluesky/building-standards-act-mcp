@@ -115,7 +115,29 @@ export function registerGetKokujiTool(server: McpServer): void {
             return { content: [{ type: "text" as const, text }] };
           }
 
-          // Step 2b: MLIT failed — try e-Gov API if law_id exists
+          // Step 2b: MLIT failed — try preset pdf_url if available
+          if (preset.pdf_url) {
+            try {
+              const pdfText = await extractTextFromPdf(preset.pdf_url);
+              const text = [
+                `【告示】${preset.title}`,
+                `法令番号: ${preset.law_num}`,
+                `委任元: ${preset.delegated_by}`,
+                "",
+                pdfText,
+                "",
+                `出典: 国土交通省（PDF直接取得）`,
+                `URL: ${preset.pdf_url}`,
+              ].join("\n");
+              return { content: [{ type: "text" as const, text }] };
+            } catch (err) {
+              // Update diagnostic and fall through to next fallback
+              diag.pdfUrl = preset.pdf_url;
+              diag.error = `PDF直接取得に失敗: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          }
+
+          // Step 2c: MLIT and pdf_url failed — try e-Gov API if law_id exists
           if (preset.law_id) {
             try {
               const lawData = await getLawData(preset.law_id);

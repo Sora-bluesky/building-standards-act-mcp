@@ -2,6 +2,7 @@ import { getLawData } from "./egov-client.js";
 import { parseArticle } from "./egov-parser.js";
 import { formatArticleRef } from "./errors.js";
 import { LawRegistry } from "./law-registry.js";
+import { resolveLawId } from "./law-resolver.js";
 import type { ArticleReference, RelatedLawSuggestion } from "./types.js";
 
 const registry = new LawRegistry();
@@ -24,17 +25,19 @@ export async function findRelatedLaws(
   lawName: string,
   articleNumber: string,
 ): Promise<RelatedLawSuggestion> {
-  const preset = registry.findByName(lawName);
-  if (!preset) {
-    throw new Error(`法令「${lawName}」がプリセットに見つかりませんでした。`);
+  // Look up alias for group info, then resolve law_id via e-Gov
+  const alias = registry.findByName(lawName);
+  const resolved = await resolveLawId(lawName);
+  if (!resolved) {
+    throw new Error(`法令「${lawName}」が見つかりませんでした。`);
   }
 
-  const lawData = await getLawData(preset.law_id);
+  const lawData = await getLawData(resolved.law_id);
   const article = parseArticle(lawData.law_full_text, articleNumber);
 
   if (!article) {
     throw new Error(
-      `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
+      `${resolved.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
     );
   }
 
@@ -46,13 +49,15 @@ export async function findRelatedLaws(
   const sameLawRefs = extractSameLawRefs(refs);
 
   // Get same-group laws (excluding the source law itself)
-  const sameGroupLaws = registry
-    .getByGroup(preset.group)
-    .filter((p) => p.law_id !== preset.law_id)
-    .map((p) => ({ law_name: p.title, law_id: p.law_id }));
+  const sameGroupLaws = alias
+    ? registry
+        .getByGroup(alias.group)
+        .filter((a) => a.title !== alias.title)
+        .map((a) => ({ law_name: a.title }))
+    : [];
 
   return {
-    source_law: preset.title,
+    source_law: resolved.title,
     source_article: articleNumber,
     directly_referenced: directlyReferenced,
     delegated_to: delegatedTo,
@@ -74,12 +79,12 @@ function extractCrossLawRefs(
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const preset = registry.findByName(ref.target_law);
+    const knownAlias = registry.findByName(ref.target_law);
     results.push({
       law_name: ref.target_law,
       article: ref.target_article,
       raw_text: ref.raw_text,
-      preset_available: preset !== null,
+      preset_available: knownAlias !== undefined,
     });
   }
 

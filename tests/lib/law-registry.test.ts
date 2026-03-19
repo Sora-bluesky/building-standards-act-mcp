@@ -9,7 +9,6 @@ describe("LawRegistry", () => {
       const result = registry.findByName("建築基準法");
       expect(result).toBeDefined();
       expect(result!.title).toBe("建築基準法");
-      expect(result!.law_id).toBe("325AC0000000201");
     });
 
     it("finds a law by abbreviation", () => {
@@ -37,45 +36,42 @@ describe("LawRegistry", () => {
   });
 
   describe("search", () => {
-    it("returns matching presets for a keyword in titles", () => {
+    it("returns matching aliases for a keyword in titles", () => {
       const results = registry.search("建築");
       expect(results.length).toBeGreaterThan(0);
-      // Should include at least 建築基準法
-      expect(results.some((p) => p.title === "建築基準法")).toBe(true);
+      expect(results.some((a) => a.title === "建築基準法")).toBe(true);
     });
 
-    it("returns matching presets for a keyword in abbreviations", () => {
+    it("returns matching aliases for a keyword in abbreviations", () => {
       const results = registry.search("建基");
       expect(results.length).toBeGreaterThan(0);
-      expect(results.some((p) => p.title === "建築基準法")).toBe(true);
+      expect(results.some((a) => a.title === "建築基準法")).toBe(true);
     });
 
-    it("returns matching presets for a keyword in group", () => {
+    it("returns matching aliases for a keyword in group", () => {
       const results = registry.search("防火");
       expect(results.length).toBeGreaterThan(0);
-      // 4章 group contains 防火
-      expect(results.some((p) => p.group.includes("防火"))).toBe(true);
+      expect(results.some((a) => a.group.includes("防火"))).toBe(true);
     });
 
-    it("returns an empty array when no presets match", () => {
+    it("returns an empty array when no aliases match", () => {
       const results = registry.search("ランダムなキーワード");
       expect(results).toEqual([]);
     });
   });
 
   describe("getByGroup", () => {
-    it("returns presets belonging to a specific chapter group", () => {
+    it("returns aliases belonging to a specific chapter group", () => {
       const results = registry.getByGroup("1章");
       expect(results.length).toBeGreaterThan(0);
-      // All results should be in a group containing "1章"
-      for (const preset of results) {
-        expect(preset.group).toContain("1章");
+      for (const alias of results) {
+        expect(alias.group).toContain("1章");
       }
     });
 
     it("includes expected laws in group 1章", () => {
       const results = registry.getByGroup("1章");
-      const titles = results.map((p) => p.title);
+      const titles = results.map((a) => a.title);
       expect(titles).toContain("建築基準法");
       expect(titles).toContain("建築基準法施行令");
       expect(titles).toContain("建築基準法施行規則");
@@ -89,7 +85,7 @@ describe("LawRegistry", () => {
   });
 
   describe("getAll", () => {
-    it("returns all presets", () => {
+    it("returns all aliases", () => {
       const all = registry.getAll();
       expect(all.length).toBeGreaterThan(0);
     });
@@ -97,26 +93,23 @@ describe("LawRegistry", () => {
     it("returns a defensive copy (modifying result does not affect registry)", () => {
       const first = registry.getAll();
       const originalLength = first.length;
-
-      // Mutate the returned array
       first.pop();
-
       const second = registry.getAll();
       expect(second.length).toBe(originalLength);
     });
   });
 
-  describe("expanded presets", () => {
-    it("contains at least 100 presets", () => {
+  describe("alias data integrity", () => {
+    it("contains at least 100 aliases", () => {
       const all = registry.getAll();
       expect(all.length).toBeGreaterThanOrEqual(100);
     });
 
-    it("has no duplicate law_ids", () => {
+    it("has no duplicate titles", () => {
       const all = registry.getAll();
-      const ids = all.map((p) => p.law_id);
-      const unique = new Set(ids);
-      expect(unique.size).toBe(ids.length);
+      const titles = all.map((a) => a.title);
+      const unique = new Set(titles);
+      expect(unique.size).toBe(titles.length);
     });
 
     it("covers all 11 chapters", () => {
@@ -126,28 +119,16 @@ describe("LawRegistry", () => {
       }
     });
 
-    it("has balanced tier distribution", () => {
+    it("all aliases have non-empty abbrev", () => {
       const all = registry.getAll();
-      const cabinet = all.filter((p) => p.tier === "CabinetOrder");
-      const ministerial = all.filter((p) => p.tier === "MinisterialOrdinance");
-      expect(cabinet.length).toBeGreaterThanOrEqual(10);
-      expect(ministerial.length).toBeGreaterThanOrEqual(5);
-    });
-
-    it("all presets have verified_at set", () => {
-      const all = registry.getAll();
-      for (const preset of all) {
-        expect(preset.verified_at).toBeDefined();
-        expect(preset.verified_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      for (const alias of all) {
+        expect(alias.abbrev.length).toBeGreaterThan(0);
       }
     });
 
     it("finds newly added laws by name", () => {
-      // Chapter 5
       expect(registry.findByName("地震防災特措法")).toBeDefined();
-      // Chapter 6
       expect(registry.findByName("JIS法")).toBeDefined();
-      // Chapter 8
       expect(registry.findByName("民泊新法")).toBeDefined();
     });
   });

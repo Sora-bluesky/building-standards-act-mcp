@@ -8,9 +8,21 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
 }));
 
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
+
 import { registerSuggestRelatedTool } from "../../src/tools/suggest-related.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 let handler: Function;
 
@@ -42,6 +54,8 @@ describe("suggest_related tool", () => {
   });
 
   it("returns error for unknown law", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({
       law_name: "存在しない法律",
       article_number: "1",
@@ -52,6 +66,7 @@ describe("suggest_related tool", () => {
   });
 
   it("formats cross_law references correctly", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "20",
@@ -82,6 +97,7 @@ describe("suggest_related tool", () => {
   });
 
   it("shows no-reference message for clean article", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "1",
@@ -102,6 +118,7 @@ describe("suggest_related tool", () => {
   });
 
   it("formats delegation references", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "20",

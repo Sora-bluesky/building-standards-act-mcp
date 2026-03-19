@@ -9,10 +9,21 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
   parseFullLaw: vi.fn(),
 }));
+vi.mock("../../src/lib/law-resolver.js", () => ({
+  resolveLawId: vi.fn(),
+}));
 
 import { registerGetFullLawTool } from "../../src/tools/get-full-law.js";
 import { getLawData } from "../../src/lib/egov-client.js";
 import { parseFullLaw } from "../../src/lib/egov-parser.js";
+import { resolveLawId } from "../../src/lib/law-resolver.js";
+
+const MOCK_RESOLVED = {
+  law_id: "325AC0000000201",
+  title: "建築基準法",
+  law_num: "昭和二十五年法律第二百一号",
+  source: "alias" as const,
+};
 
 // Capture the handler registered by the tool
 let handler: Function;
@@ -45,6 +56,7 @@ describe("get_full_law tool", () => {
     const mockFullText =
       "建築基準法\n昭和二十五年法律第二百一号\n\n第一章 総則\n\n第一条 ...";
 
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
     vi.mocked(parseFullLaw).mockReturnValue(mockFullText);
 
@@ -65,6 +77,8 @@ describe("get_full_law tool", () => {
   });
 
   it("returns error when law not found in registry", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(null);
+
     const result = await handler({ law_name: "存在しない法律" });
 
     expect(result.isError).toBe(true);
@@ -74,6 +88,7 @@ describe("get_full_law tool", () => {
   });
 
   it("returns error on API failure", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawData).mockRejectedValue(
       new Error("e-Gov API returned 503"),
     );

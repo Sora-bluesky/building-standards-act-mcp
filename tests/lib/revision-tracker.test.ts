@@ -10,17 +10,14 @@ import {
   getLawRevisionHistory,
 } from "../../src/lib/revision-tracker.js";
 import { getLawRevisions } from "../../src/lib/egov-client.js";
-import type { LawPreset, EgovRevisionInfo } from "../../src/lib/types.js";
+import type { ResolvedLaw, EgovRevisionInfo } from "../../src/lib/types.js";
 
-function makePreset(overrides: Partial<LawPreset> = {}): LawPreset {
+function makeResolved(overrides: Partial<ResolvedLaw> = {}): ResolvedLaw {
   return {
     law_id: "325AC0000000201",
-    law_num: "昭和二十五年法律第二百一号",
     title: "建築基準法",
-    abbrev: ["建基法"],
-    group: "1章 総則",
-    tier: "Act",
-    verified_at: "2026-03-17",
+    law_num: "昭和二十五年法律第二百一号",
+    source: "alias",
     ...overrides,
   };
 }
@@ -55,29 +52,28 @@ describe("revision-tracker", () => {
   });
 
   describe("checkLawUpdate", () => {
-    it("returns up_to_date when amendment date is before verified_at", async () => {
+    it("returns has_revisions when amendment date exists", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [makeRevision({ amendment_promulgate_date: "2025-06-01" })],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("up_to_date");
+      expect(result.status).toBe("has_revisions");
       expect(result.title).toBe("建築基準法");
-      expect(result.verified_at).toBe("2026-03-17");
       expect(result.latest_amendment_date).toBe("2025-06-01");
     });
 
-    it("returns updated when amendment date is after verified_at", async () => {
+    it("returns has_revisions with latest amendment law info", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [makeRevision({ amendment_promulgate_date: "2026-04-01" })],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("updated");
+      expect(result.status).toBe("has_revisions");
       expect(result.latest_amendment_date).toBe("2026-04-01");
       expect(result.latest_amendment_law).toBe("令和七年法律第九十九号");
     });
@@ -93,12 +89,12 @@ describe("revision-tracker", () => {
         ],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
       expect(result.status).toBe("repealed");
     });
 
-    it("returns up_to_date when repeal_status is 'none'", async () => {
+    it("returns has_revisions when repeal_status is 'none'", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [
@@ -109,20 +105,20 @@ describe("revision-tracker", () => {
         ],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("up_to_date");
+      expect(result.status).toBe("has_revisions");
     });
 
-    it("returns up_to_date when revisions is empty", async () => {
+    it("returns current when revisions is empty", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("up_to_date");
+      expect(result.status).toBe("current");
     });
 
     it("returns error when API call fails", async () => {
@@ -130,21 +126,21 @@ describe("revision-tracker", () => {
         new Error("API connection failed"),
       );
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
       expect(result.status).toBe("error");
       expect(result.error_message).toContain("API connection failed");
     });
 
-    it("returns up_to_date when amendment_promulgate_date is empty", async () => {
+    it("returns current when amendment_promulgate_date is empty", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [makeRevision({ amendment_promulgate_date: "" })],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("up_to_date");
+      expect(result.status).toBe("current");
     });
 
     it("uses amendment_law_num as fallback when amendment_law_title is empty", async () => {
@@ -159,26 +155,26 @@ describe("revision-tracker", () => {
         ],
       });
 
-      const result = await checkLawUpdate(makePreset());
+      const result = await checkLawUpdate(makeResolved());
 
-      expect(result.status).toBe("updated");
+      expect(result.status).toBe("has_revisions");
       expect(result.latest_amendment_law).toBe("令和八年法律第一号");
     });
   });
 
   describe("checkLawUpdates", () => {
-    it("checks multiple presets with rate limiting", async () => {
+    it("checks multiple resolved laws with rate limiting", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [makeRevision({ amendment_promulgate_date: "2025-01-01" })],
       });
 
-      const presets = [
-        makePreset({ law_id: "AAA", title: "法A" }),
-        makePreset({ law_id: "BBB", title: "法B" }),
+      const resolvedLaws = [
+        makeResolved({ law_id: "AAA", title: "法A" }),
+        makeResolved({ law_id: "BBB", title: "法B" }),
       ];
 
-      const results = await checkLawUpdates(presets);
+      const results = await checkLawUpdates(resolvedLaws);
 
       expect(results).toHaveLength(2);
       expect(results[0].title).toBe("法A");
@@ -202,17 +198,17 @@ describe("revision-tracker", () => {
         revisions,
       });
 
-      const result = await getLawRevisionHistory(makePreset());
+      const result = await getLawRevisionHistory(makeResolved());
 
       expect(result.revisions).toBeDefined();
       expect(result.revisions).toHaveLength(2);
-      expect(result.status).toBe("up_to_date");
+      expect(result.status).toBe("has_revisions");
     });
 
     it("returns error status on API failure", async () => {
       vi.mocked(getLawRevisions).mockRejectedValue(new Error("timeout"));
 
-      const result = await getLawRevisionHistory(makePreset());
+      const result = await getLawRevisionHistory(makeResolved());
 
       expect(result.status).toBe("error");
       expect(result.error_message).toContain("timeout");

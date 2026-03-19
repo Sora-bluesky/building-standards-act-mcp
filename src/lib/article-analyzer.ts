@@ -1,10 +1,8 @@
 import { getLawData } from "./egov-client.js";
 import { parseArticleStructured } from "./egov-parser.js";
 import { formatArticleRef } from "./errors.js";
-import { LawRegistry } from "./law-registry.js";
+import { resolveLawId } from "./law-resolver.js";
 import type { ArticleAnalysis, StructuredArticle } from "./types.js";
-
-const registry = new LawRegistry();
 
 const PREVIEW_LENGTH = 100;
 
@@ -73,17 +71,17 @@ export async function analyzeArticle(
   lawName: string,
   articleNumber: string,
 ): Promise<ArticleAnalysis> {
-  const preset = registry.findByName(lawName);
-  if (!preset) {
-    throw new Error(`法令「${lawName}」がプリセットに見つかりませんでした。`);
+  const resolved = await resolveLawId(lawName);
+  if (!resolved) {
+    throw new Error(`法令「${lawName}」が見つかりませんでした。`);
   }
 
-  const lawData = await getLawData(preset.law_id);
+  const lawData = await getLawData(resolved.law_id);
   const article = parseArticleStructured(lawData.law_full_text, articleNumber);
 
   if (!article) {
     throw new Error(
-      `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
+      `${resolved.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
     );
   }
 
@@ -103,8 +101,8 @@ export async function analyzeArticle(
   ];
 
   return {
-    law_name: preset.title,
-    law_num: preset.law_num,
+    law_name: resolved.title,
+    law_num: resolved.law_num,
     article_num: article.article_num,
     article_title: article.article_title,
     caption: stripParentheses(article.article_caption),
