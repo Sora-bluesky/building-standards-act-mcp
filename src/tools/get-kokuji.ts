@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
 import { findKokujiPdfUrl } from "../lib/mlit-client.js";
 import { extractTextFromPdf } from "../lib/pdf-extractor.js";
@@ -66,7 +67,7 @@ async function fetchViaEgov(
       return null;
     }
 
-    const firstLaw = searchResult.laws[0];
+    const firstLaw = findBestMatch(searchResult.laws, name);
     const title =
       firstLaw.revision_info?.law_title ??
       firstLaw.current_revision_info?.law_title ??

@@ -1,3 +1,4 @@
+import { findBestMatch } from "./best-match.js";
 import { LawRegistry } from "./law-registry.js";
 import { searchLaws } from "./egov-client.js";
 import type { ResolvedLaw } from "./types.js";
@@ -24,14 +25,14 @@ export async function resolveLawId(
     const result = await searchLaws(searchName);
     if (result.count === 0) return null;
 
-    const first = result.laws[0];
+    const best = findBestMatch(result.laws, searchName);
     return {
-      law_id: first.law_info.law_id,
+      law_id: best.law_info.law_id,
       title:
-        first.revision_info?.law_title ??
-        first.current_revision_info?.law_title ??
+        best.revision_info?.law_title ??
+        best.current_revision_info?.law_title ??
         searchName,
-      law_num: first.law_info.law_num,
+      law_num: best.law_info.law_num,
       source: alias ? "alias" : "egov_search",
     };
   } catch {
