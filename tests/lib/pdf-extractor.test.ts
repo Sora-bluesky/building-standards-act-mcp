@@ -4,15 +4,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Mock pdf-parse module — PDFParse is a class used as `new PDFParse({ data })`
-const mockGetText = vi.fn();
-const mockDestroy = vi.fn();
+// Mock pdfjs-dist — extractTextFromPdf calls getDocument().promise, then
+// iterates pages with getPage() and getTextContent().
+const mockGetTextContent = vi.fn();
+const mockGetPage = vi.fn();
+const mockGetDocument = vi.fn();
 
-vi.mock("pdf-parse", () => ({
-  PDFParse: vi.fn().mockImplementation(() => ({
-    getText: mockGetText,
-    destroy: mockDestroy,
-  })),
+vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({
+  GlobalWorkerOptions: { workerSrc: "" },
+  getDocument: (...args: unknown[]) => ({
+    promise: mockGetDocument(...args),
+  }),
 }));
 
 import { extractTextFromPdf } from "../../src/lib/pdf-extractor.js";
@@ -21,7 +23,7 @@ import { extractTextFromPdf } from "../../src/lib/pdf-extractor.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** A fake PDF buffer (content is irrelevant since pdf-parse is mocked). */
+/** A fake PDF buffer (content is irrelevant since pdfjs-dist is mocked). */
 const FAKE_PDF_BUFFER = new ArrayBuffer(128);
 
 function createPdfResponse(buffer: ArrayBuffer = FAKE_PDF_BUFFER) {
@@ -31,6 +33,20 @@ function createPdfResponse(buffer: ArrayBuffer = FAKE_PDF_BUFFER) {
   };
 }
 
+/** Set up the pdfjs-dist mock to return `pageTexts` (one string per page). */
+function setupPdfjsMock(pageTexts: string[]) {
+  mockGetPage.mockImplementation(async (pageNum: number) => ({
+    getTextContent: async () => ({
+      items: [{ str: pageTexts[pageNum - 1] ?? "" }],
+    }),
+  }));
+
+  mockGetDocument.mockResolvedValue({
+    numPages: pageTexts.length,
+    getPage: mockGetPage,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -38,22 +54,18 @@ function createPdfResponse(buffer: ArrayBuffer = FAKE_PDF_BUFFER) {
 describe("pdf-extractor", () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    mockGetText.mockReset();
-    mockDestroy.mockReset();
-    mockDestroy.mockResolvedValue(undefined);
+    mockGetDocument.mockReset();
+    mockGetPage.mockReset();
+    mockGetTextContent.mockReset();
   });
-
-  // NOTE: Do NOT use vi.restoreAllMocks() here — it would remove
-  // the mockImplementation from the vi.mock("pdf-parse") factory,
-  // causing subsequent tests to fail with "parser.getText is not a function".
 
   describe("extractTextFromPdf — success cases", () => {
     it("extracts text from a PDF URL", async () => {
       const pdfUrl = "http://example.com/success-test.pdf";
       mockFetch.mockResolvedValueOnce(createPdfResponse());
-      mockGetText.mockResolvedValueOnce({
-        text: "第一条　耐火構造は、次の各号に掲げる建築物の部分に応じ...",
-      });
+      setupPdfjsMock([
+        "第一条　耐火構造は、次の各号に掲げる建築物の部分に応じ...",
+      ]);
 
       const result = await extractTextFromPdf(pdfUrl);
 
@@ -65,16 +77,13 @@ describe("pdf-extractor", () => {
         pdfUrl,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
-      expect(mockGetText).toHaveBeenCalledOnce();
-      expect(mockDestroy).toHaveBeenCalledOnce();
+      expect(mockGetDocument).toHaveBeenCalledOnce();
     });
 
     it("returns cached text on second call with same URL", async () => {
       const pdfUrl = "http://example.com/cache-test.pdf";
       mockFetch.mockResolvedValueOnce(createPdfResponse());
-      mockGetText.mockResolvedValueOnce({
-        text: "キャッシュテスト用テキスト",
-      });
+      setupPdfjsMock(["キャッシュテスト用テキスト"]);
 
       const first = await extractTextFromPdf(pdfUrl);
       const second = await extractTextFromPdf(pdfUrl);
@@ -83,20 +92,17 @@ describe("pdf-extractor", () => {
       expect(second).toBe("キャッシュテスト用テキスト");
       // fetch + parse should only be called once (second call hits cache)
       expect(mockFetch).toHaveBeenCalledOnce();
-      expect(mockGetText).toHaveBeenCalledOnce();
+      expect(mockGetDocument).toHaveBeenCalledOnce();
     });
 
-    it("normalizes text: collapses excessive blank lines", async () => {
-      const pdfUrl = "http://example.com/normalize-test.pdf";
+    it("concatenates text from multiple pages", async () => {
+      const pdfUrl = "http://example.com/multipage-test.pdf";
       mockFetch.mockResolvedValueOnce(createPdfResponse());
-      mockGetText.mockResolvedValueOnce({
-        text: "第一条\r\n\r\n\r\n\r\n第二条\r第三条",
-      });
+      setupPdfjsMock(["第一条", "第二条"]);
 
       const result = await extractTextFromPdf(pdfUrl);
 
-      // \r\n -> \n, 4+ newlines collapsed to 2, \r -> \n
-      expect(result).toBe("第一条\n\n第二条\n第三条");
+      expect(result).toBe("第一条\n第二条");
     });
   });
 
@@ -130,18 +136,17 @@ describe("pdf-extractor", () => {
     it("throws error when PDF has no text content", async () => {
       const pdfUrl = "http://example.com/empty-text-test.pdf";
       mockFetch.mockResolvedValueOnce(createPdfResponse());
-      mockGetText.mockResolvedValueOnce({ text: "" });
+      setupPdfjsMock([""]);
 
       await expect(extractTextFromPdf(pdfUrl)).rejects.toThrow(
         "PDFからテキストを抽出できませんでした",
       );
-      expect(mockDestroy).toHaveBeenCalledOnce();
     });
 
     it("throws error when PDF text is only whitespace", async () => {
       const pdfUrl = "http://example.com/whitespace-test.pdf";
       mockFetch.mockResolvedValueOnce(createPdfResponse());
-      mockGetText.mockResolvedValueOnce({ text: "   \n\n\r\n  " });
+      setupPdfjsMock(["   \n\n\r\n  "]);
 
       await expect(extractTextFromPdf(pdfUrl)).rejects.toThrow(
         "PDFからテキストを抽出できませんでした",

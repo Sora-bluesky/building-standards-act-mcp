@@ -12,7 +12,6 @@ if (typeof globalThis.DOMMatrix === "undefined") {
     m22 = 1;
     m41 = 0;
     m42 = 0;
-    // pdfjs calls new DOMMatrix(array) or new DOMMatrix()
     constructor(init?: number[]) {
       if (init && init.length >= 6) {
         this.m11 = init[0];
@@ -80,6 +79,7 @@ function normalizeText(raw: string): string {
 
 /**
  * Download a PDF from a URL and extract its text content.
+ * Uses pdfjs-dist directly with worker configured for serverless compatibility.
  * Results are cached for 24 hours to avoid redundant downloads.
  *
  * @param pdfUrl - The URL of the PDF to download and parse
@@ -95,14 +95,31 @@ export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
 
   const data = await fetchPdfBuffer(pdfUrl);
 
-  // Lazy import: pdf-parse depends on pdfjs-dist which requires @napi-rs/canvas.
-  // Static import crashes serverless environments (Vercel) that lack native libs.
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data });
-  const textResult = await parser.getText();
-  await parser.destroy();
+  // Lazy import: pdfjs-dist may need native-like APIs (DOMMatrix, etc.).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfjsLib: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  const text = normalizeText(textResult.text);
+  // Resolve worker path relative to the pdfjs-dist package.
+  // import.meta.resolve returns a file:// URL that works across platforms.
+  // In test environments (vitest) import.meta.resolve may not exist.
+  if (typeof import.meta.resolve === "function") {
+    const workerSrc = import.meta
+      .resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+  }
+
+  const doc = await pdfjsLib.getDocument({ data }).promise;
+
+  let fullText = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pageText = content.items.map((item: any) => item.str).join("");
+    fullText += pageText + "\n";
+  }
+
+  const text = normalizeText(fullText);
 
   if (!text) {
     throw new Error(`PDFからテキストを抽出できませんでした: ${pdfUrl}`);
