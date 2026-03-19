@@ -5,9 +5,9 @@ describe("KokujiRegistry", () => {
   const registry = new KokujiRegistry();
 
   describe("getAll", () => {
-    it("returns 7 kokuji presets", () => {
+    it("returns 9 kokuji presets", () => {
       const all = registry.getAll();
-      expect(all).toHaveLength(7);
+      expect(all).toHaveLength(9);
     });
 
     it("returns a defensive copy (different reference each call)", () => {
@@ -79,6 +79,28 @@ describe("KokujiRegistry", () => {
     it("returns empty array for unknown keyword", () => {
       const results = registry.search("絶対に存在しないキーワード");
       expect(results).toEqual([]);
+    });
+
+    it("finds energy-related presets by keyword", () => {
+      const results = registry.search("省エネ");
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(
+        results.some((p) => p.abbrev.some((a) => a.includes("省エネ"))),
+      ).toBe(true);
+    });
+  });
+
+  describe("findByName (energy kokuji)", () => {
+    it("finds UA value calculation kokuji by abbreviation", () => {
+      const result = registry.findByName("UA値算出告示");
+      expect(result).toBeDefined();
+      expect(result!.title).toContain("算出方法等に係る事項");
+    });
+
+    it("finds insulation grade kokuji by abbreviation", () => {
+      const result = registry.findByName("断熱等性能等級告示");
+      expect(result).toBeDefined();
+      expect(result!.title).toContain("熱の損失の防止");
     });
   });
 });
