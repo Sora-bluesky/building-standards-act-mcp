@@ -1,5 +1,31 @@
 import { createCache } from "./cache.js";
 
+// Polyfill DOMMatrix for serverless environments (Vercel Node 20/22).
+// pdfjs-dist uses DOMMatrix for text position calculations during extraction.
+// A minimal stub is sufficient — we only need the raw text, not coordinates.
+if (typeof globalThis.DOMMatrix === "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).DOMMatrix = class DOMMatrix {
+    m11 = 1;
+    m12 = 0;
+    m21 = 0;
+    m22 = 1;
+    m41 = 0;
+    m42 = 0;
+    // pdfjs calls new DOMMatrix(array) or new DOMMatrix()
+    constructor(init?: number[]) {
+      if (init && init.length >= 6) {
+        this.m11 = init[0];
+        this.m12 = init[1];
+        this.m21 = init[2];
+        this.m22 = init[3];
+        this.m41 = init[4];
+        this.m42 = init[5];
+      }
+    }
+  };
+}
+
 const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 const PDF_USER_AGENT =
