@@ -235,6 +235,29 @@ const TEST_LAW_TREE: LawNode = {
                     },
                   ],
                 },
+                {
+                  tag: "Article",
+                  attr: { Num: "6_3" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第六条の三"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["確認審査等に関する指針の準用規定。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
               ],
             },
           ],
@@ -293,15 +316,35 @@ describe("egov-parser", () => {
       expect(result).not.toBeNull();
       expect(result!.references).toBeUndefined();
     });
+
+    it('finds article by "第6条の3" format (条 in the middle)', () => {
+      const result = parseArticle(TEST_LAW_TREE, "第6条の3");
+      expect(result).not.toBeNull();
+      expect(result!.article_num).toBe("6_3");
+      expect(result!.text).toContain("確認審査等に関する指針の準用規定");
+    });
+
+    it('finds article by "6条の3" format (no 第 prefix)', () => {
+      const result = parseArticle(TEST_LAW_TREE, "6条の3");
+      expect(result).not.toBeNull();
+      expect(result!.article_num).toBe("6_3");
+    });
+
+    it('finds article by "6_3" format (already normalized)', () => {
+      const result = parseArticle(TEST_LAW_TREE, "6_3");
+      expect(result).not.toBeNull();
+      expect(result!.article_num).toBe("6_3");
+    });
   });
 
   describe("parseAllArticles", () => {
     it("returns all articles from the law tree", () => {
       const articles = parseAllArticles(TEST_LAW_TREE);
-      expect(articles).toHaveLength(3);
+      expect(articles).toHaveLength(4);
       expect(articles[0].article_num).toBe("1");
       expect(articles[1].article_num).toBe("2");
       expect(articles[2].article_num).toBe("3");
+      expect(articles[3].article_num).toBe("6_3");
     });
   });
 
@@ -432,13 +475,760 @@ describe("egov-parser", () => {
   describe("parseAllArticlesStructured", () => {
     it("returns all articles in structured format", () => {
       const articles = parseAllArticlesStructured(TEST_LAW_TREE);
-      expect(articles).toHaveLength(3);
+      expect(articles).toHaveLength(4);
       expect(articles[0].article_num).toBe("1");
       expect(articles[0].paragraphs).toHaveLength(1);
       expect(articles[1].article_num).toBe("2");
       expect(articles[1].paragraphs[0].items).toHaveLength(2);
       expect(articles[2].article_num).toBe("3");
       expect(articles[2].paragraphs).toHaveLength(2);
+      expect(articles[3].article_num).toBe("6_3");
+      expect(articles[3].paragraphs).toHaveLength(1);
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // Table rendering tests
+  // -----------------------------------------------------------------
+
+  describe("table rendering", () => {
+    // Simple 2x2 table (mimicking e-Gov API structure)
+    const SIMPLE_TABLE: LawNode = {
+      tag: "Table",
+      children: [
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["地域"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["基準値"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["1地域"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["0.46"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["2地域"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["0.46"] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Table with colspan
+    const TABLE_WITH_COLSPAN: LawNode = {
+      tag: "Table",
+      children: [
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              attr: { colspan: "2" },
+              children: [{ tag: "Sentence", children: ["居室の種類"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["面積"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["住宅"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["居室"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["20㎡"] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Table with rowspan
+    const TABLE_WITH_ROWSPAN: LawNode = {
+      tag: "Table",
+      children: [
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["構造"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["用途"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["基準"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              attr: { rowspan: "2" },
+              children: [{ tag: "Sentence", children: ["木造"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["住宅"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["A"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            // No first column — rowspan from previous row fills it
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["事務所"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["B"] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    // TableStruct with title
+    const TABLE_STRUCT_WITH_TITLE: LawNode = {
+      tag: "TableStruct",
+      children: [
+        { tag: "TableStructTitle", children: ["別表第一"] },
+        SIMPLE_TABLE,
+      ],
+    };
+
+    // TableStruct without title
+    const TABLE_STRUCT_NO_TITLE: LawNode = {
+      tag: "TableStruct",
+      children: [SIMPLE_TABLE],
+    };
+
+    // Cell with multiple Sentences
+    const TABLE_MULTI_SENTENCE: LawNode = {
+      tag: "Table",
+      children: [
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["項目"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["備考"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["A"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [
+                {
+                  tag: "Sentence",
+                  attr: { Num: "1" },
+                  children: ["第一文。"],
+                },
+                {
+                  tag: "Sentence",
+                  attr: { Num: "2" },
+                  children: ["第二文。"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Empty table
+    const EMPTY_TABLE: LawNode = {
+      tag: "Table",
+      children: [],
+    };
+
+    // Article containing a TableStruct (as sibling of Paragraph)
+    const ARTICLE_WITH_TABLE: LawNode = {
+      tag: "Law",
+      attr: { Era: "Heisei", Year: "28", Lang: "ja" },
+      children: [
+        {
+          tag: "LawBody",
+          children: [
+            { tag: "LawTitle", children: ["テーブルテスト法"] },
+            {
+              tag: "MainProvision",
+              children: [
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: [
+                                "次の表に掲げる地域区分に応じた基準値とする。",
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                    TABLE_STRUCT_WITH_TITLE,
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Law tree with table in structural element (for parseFullLaw)
+    const LAW_WITH_TABLE_IN_CHAPTER: LawNode = {
+      tag: "Law",
+      attr: { Era: "Heisei", Year: "28", Lang: "ja" },
+      children: [
+        {
+          tag: "LawBody",
+          children: [
+            { tag: "LawTitle", children: ["テーブルテスト法"] },
+            {
+              tag: "MainProvision",
+              children: [
+                {
+                  tag: "Chapter",
+                  attr: { Num: "1" },
+                  children: [
+                    {
+                      tag: "ChapterTitle",
+                      children: ["第一章　総則"],
+                    },
+                    {
+                      tag: "Article",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ArticleTitle", children: ["第一条"] },
+                        {
+                          tag: "Paragraph",
+                          attr: { Num: "1" },
+                          children: [
+                            { tag: "ParagraphNum" },
+                            {
+                              tag: "ParagraphSentence",
+                              children: [
+                                {
+                                  tag: "Sentence",
+                                  children: ["テスト条文。"],
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                        TABLE_STRUCT_NO_TITLE,
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    it("renders a simple table as markdown", () => {
+      const result = parseArticle(ARTICLE_WITH_TABLE, "1");
+      expect(result).not.toBeNull();
+      // Should contain markdown table, not [表] placeholder
+      expect(result!.text).not.toContain("[表]");
+      expect(result!.text).toContain("| 地域 | 基準値 |");
+      expect(result!.text).toContain("| --- | --- |");
+      expect(result!.text).toContain("| 1地域 | 0.46 |");
+      expect(result!.text).toContain("| 2地域 | 0.46 |");
+    });
+
+    it("renders TableStruct title before the table", () => {
+      const result = parseArticle(ARTICLE_WITH_TABLE, "1");
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("別表第一");
+      // Title should appear before the table
+      const titleIdx = result!.text.indexOf("別表第一");
+      const tableIdx = result!.text.indexOf("| 地域");
+      expect(titleIdx).toBeLessThan(tableIdx);
+    });
+
+    it("handles colspan by adding empty cells", () => {
+      const lawWithColspan: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [{ tag: "Sentence", children: ["表。"] }],
+                          },
+                        ],
+                      },
+                      { tag: "TableStruct", children: [TABLE_WITH_COLSPAN] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithColspan, "1");
+      expect(result).not.toBeNull();
+      // colspan=2 header row should have 3 columns total
+      expect(result!.text).toContain("| 居室の種類 |  | 面積 |");
+      expect(result!.text).toContain("| 住宅 | 居室 | 20㎡ |");
+    });
+
+    it("handles rowspan by duplicating cell content", () => {
+      const lawWithRowspan: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [{ tag: "Sentence", children: ["表。"] }],
+                          },
+                        ],
+                      },
+                      { tag: "TableStruct", children: [TABLE_WITH_ROWSPAN] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithRowspan, "1");
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("| 構造 | 用途 | 基準 |");
+      expect(result!.text).toContain("| 木造 | 住宅 | A |");
+      // rowspan=2: "木造" should appear in the next row too
+      expect(result!.text).toContain("| 木造 | 事務所 | B |");
+    });
+
+    it("joins multiple Sentences in a cell with space", () => {
+      const lawWithMultiSentence: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [{ tag: "Sentence", children: ["表。"] }],
+                          },
+                        ],
+                      },
+                      {
+                        tag: "TableStruct",
+                        children: [TABLE_MULTI_SENTENCE],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithMultiSentence, "1");
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("第一文。 第二文。");
+    });
+
+    it("renders empty table as empty string", () => {
+      const lawWithEmpty: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [
+                              { tag: "Sentence", children: ["条文。"] },
+                            ],
+                          },
+                        ],
+                      },
+                      { tag: "TableStruct", children: [EMPTY_TABLE] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithEmpty, "1");
+      expect(result).not.toBeNull();
+      // Empty table should not produce [表] placeholder
+      expect(result!.text).not.toContain("[表]");
+    });
+
+    it("renders table in parseFullLaw output", () => {
+      const fullText = parseFullLaw(LAW_WITH_TABLE_IN_CHAPTER);
+      expect(fullText).toContain("テーブルテスト法");
+      expect(fullText).toContain("第一章　総則");
+      // Table should be rendered, not placeholder
+      expect(fullText).not.toContain("[表]");
+      expect(fullText).toContain("| 地域 | 基準値 |");
+      expect(fullText).toContain("| 1地域 | 0.46 |");
+    });
+
+    it("renders table in structured article paragraph_sentence", () => {
+      // When a table is inside ParagraphSentence (via extractText),
+      // the structured output should include the rendered table
+      const lawWithInlineTable: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [
+                              {
+                                tag: "Sentence",
+                                children: ["次の表による。"],
+                              },
+                              SIMPLE_TABLE,
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticleStructured(lawWithInlineTable, "1");
+      expect(result).not.toBeNull();
+      expect(result!.paragraphs[0].paragraph_sentence).toContain(
+        "| 地域 | 基準値 |",
+      );
+      expect(result!.paragraphs[0].paragraph_sentence).not.toContain("[表]");
+    });
+
+    it("renders TableStruct that is a direct child of Paragraph", () => {
+      const lawWithParagraphTable: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [
+                              {
+                                tag: "Sentence",
+                                children: ["次の表のとおりとする。"],
+                              },
+                            ],
+                          },
+                          {
+                            tag: "TableStruct",
+                            children: [SIMPLE_TABLE],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithParagraphTable, "1");
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("| 地域 | 基準値 |");
+      expect(result!.text).toContain("| 1地域 | 0.46 |");
+    });
+
+    it("renders TableStruct that is a direct child of Item", () => {
+      const lawWithItemTable: LawNode = {
+        tag: "Law",
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["テスト"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [
+                              {
+                                tag: "Sentence",
+                                children: ["次の各号に掲げるとおりとする。"],
+                              },
+                            ],
+                          },
+                          {
+                            tag: "Item",
+                            attr: { Num: "1" },
+                            children: [
+                              { tag: "ItemTitle", children: ["一"] },
+                              {
+                                tag: "ItemSentence",
+                                children: [
+                                  {
+                                    tag: "Sentence",
+                                    children: ["次の表による。"],
+                                  },
+                                ],
+                              },
+                              {
+                                tag: "TableStruct",
+                                children: [SIMPLE_TABLE],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const result = parseArticle(lawWithItemTable, "1");
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("| 地域 | 基準値 |");
+      expect(result!.text).toContain("| 1地域 | 0.46 |");
+    });
+
+    it("renders AppdxTable in parseFullLaw output", () => {
+      const lawWithAppdxTable: LawNode = {
+        tag: "Law",
+        attr: { Era: "Showa", Year: "25", Lang: "ja" },
+        children: [
+          {
+            tag: "LawBody",
+            children: [
+              { tag: "LawTitle", children: ["別表テスト法"] },
+              {
+                tag: "MainProvision",
+                children: [
+                  {
+                    tag: "Article",
+                    attr: { Num: "1" },
+                    children: [
+                      { tag: "ArticleTitle", children: ["第一条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: { Num: "1" },
+                        children: [
+                          { tag: "ParagraphNum" },
+                          {
+                            tag: "ParagraphSentence",
+                            children: [
+                              {
+                                tag: "Sentence",
+                                children: [
+                                  "別表第一に掲げる用途に供する建築物。",
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                tag: "AppdxTable",
+                children: [
+                  {
+                    tag: "AppdxTableTitle",
+                    children: ["別表第一（第六条関係）"],
+                  },
+                  {
+                    tag: "TableStruct",
+                    children: [SIMPLE_TABLE],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const fullText = parseFullLaw(lawWithAppdxTable);
+      expect(fullText).toContain("別表テスト法");
+      expect(fullText).toContain("別表第一（第六条関係）");
+      expect(fullText).toContain("| 地域 | 基準値 |");
+      expect(fullText).toContain("| 1地域 | 0.46 |");
     });
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findRelatedLaws } from "../lib/related-law-finder.js";
+import { formatArticleRef } from "../lib/errors.js";
 import type { RelatedLawSuggestion } from "../lib/types.js";
 
 const schema = {
@@ -13,14 +14,14 @@ const schema = {
 function formatSuggestion(result: RelatedLawSuggestion): string {
   const lines: string[] = [];
   lines.push(
-    `## ${result.source_law} 第${result.source_article}条 の関連法令\n`,
+    `## ${result.source_law} ${formatArticleRef(result.source_article)} の関連法令\n`,
   );
 
   if (result.directly_referenced.length > 0) {
     lines.push("### 直接参照されている法令\n");
     for (const ref of result.directly_referenced) {
       const available = ref.preset_available ? "" : "（プリセット未登録）";
-      const article = ref.article ? ` 第${ref.article}条` : "";
+      const article = ref.article ? ` ${formatArticleRef(ref.article)}` : "";
       lines.push(`- **${ref.law_name}**${article}${available}`);
       lines.push(`  - 原文: ${ref.raw_text}`);
     }
@@ -36,7 +37,7 @@ function formatSuggestion(result: RelatedLawSuggestion): string {
   if (result.same_law_references.length > 0) {
     lines.push("\n### 同法令内の参照条文\n");
     for (const ref of result.same_law_references) {
-      lines.push(`- 第${ref.article}条 — ${ref.raw_text}`);
+      lines.push(`- ${formatArticleRef(ref.article)} — ${ref.raw_text}`);
     }
   }
 

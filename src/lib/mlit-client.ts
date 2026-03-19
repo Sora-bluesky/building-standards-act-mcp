@@ -98,6 +98,17 @@ function extractExcelUrl(html: string): string | null {
 }
 
 /**
+ * Convert Excel column letters to a 0-based index (e.g. "A" -> 0, "F" -> 5, "AA" -> 26).
+ */
+function columnLetterToIndex(letters: string): number {
+  let index = 0;
+  for (let i = 0; i < letters.length; i++) {
+    index = index * 26 + (letters.charCodeAt(i) - 64); // A=65
+  }
+  return index - 1; // 0-based
+}
+
+/**
  * Parse an xlsx buffer using jszip to extract row data.
  *
  * xlsx files are ZIP archives containing XML files:
@@ -156,13 +167,32 @@ function parseSheetRows(sheetXml: string, sharedStrings: string[]): string[][] {
     const rowContent = rowMatch[1];
     const cells: string[] = [];
 
-    // Match each <c> (cell) element within the row
-    const cellRegex =
-      /<c[^>]*?(?: t="([^"]*)")?[^>]*>(?:[\s\S]*?<v>([\s\S]*?)<\/v>)?[\s\S]*?<\/c>/g;
+    // Match both normal <c ...>...</c> and self-closing <c ... /> cells.
+    // Use the r attribute (e.g. "A1", "F3") for correct column placement.
+    const cellRegex = /<c\s([^>]*?)(?:>([\s\S]*?)<\/c>|\/>)/g;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
-      const cellType = cellMatch[1]; // "s" for shared string, undefined for number/literal
-      const cellValue = cellMatch[2] ?? "";
+      const attrs = cellMatch[1];
+      const body = cellMatch[2] ?? ""; // empty for self-closing
+
+      // Extract column index from r attribute (e.g. "A1" -> 0, "F3" -> 5)
+      const refMatch = attrs.match(/\br="([A-Z]+)\d+"/);
+      const colIndex = refMatch
+        ? columnLetterToIndex(refMatch[1])
+        : cells.length;
+
+      // Extract cell type from attributes (t="s" for shared string)
+      const typeMatch = attrs.match(/\bt="([^"]*)"/);
+      const cellType = typeMatch?.[1];
+
+      // Extract value from <v> tag
+      const valueMatch = body.match(/<v>([\s\S]*?)<\/v>/);
+      const cellValue = valueMatch?.[1] ?? "";
+
+      // Pad with empty strings if columns were skipped
+      while (cells.length < colIndex) {
+        cells.push("");
+      }
 
       if (cellType === "s") {
         // Shared string reference — value is the index

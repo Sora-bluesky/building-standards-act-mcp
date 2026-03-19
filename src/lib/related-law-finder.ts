@@ -1,5 +1,6 @@
 import { getLawData } from "./egov-client.js";
 import { parseArticle } from "./egov-parser.js";
+import { formatArticleRef } from "./errors.js";
 import { LawRegistry } from "./law-registry.js";
 import type { ArticleReference, RelatedLawSuggestion } from "./types.js";
 
@@ -33,7 +34,7 @@ export async function findRelatedLaws(
 
   if (!article) {
     throw new Error(
-      `${preset.title}に第${articleNumber}条が見つかりませんでした。`,
+      `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
     );
   }
 

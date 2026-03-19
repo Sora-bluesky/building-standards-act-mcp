@@ -12,7 +12,6 @@ import { detectReferences } from "./reference-detector.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-const TABLE_PLACEHOLDER = "[表]";
 const FIGURE_PLACEHOLDER = "[図]";
 
 /** Tags whose content should be skipped entirely. */
@@ -59,9 +58,9 @@ const INDENT_UNIT = "  ";
 function normalizeArticleNumber(input: string): string | null {
   let s = input.trim();
 
-  // Strip leading "第" and trailing "条"
+  // Strip leading "第" and "条" (条 may appear mid-string for "129条の2の3")
   s = s.replace(/^第/, "");
-  s = s.replace(/条$/, "");
+  s = s.replace(/条(の|$)/g, "$1");
 
   // If the string still contains kanji numerals we cannot normalize it;
   // the caller should fall back to matching against ArticleTitle text.
@@ -117,6 +116,202 @@ function findChildByTag(node: LawNode, tag: string): LawNode | undefined {
 }
 
 // ---------------------------------------------------------------------------
+// Table rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract text content from a table cell (TableColumn / TableHeaderColumn).
+ * Joins multiple Sentence children with a space.
+ */
+function extractCellText(cell: LawNode): string {
+  if (!cell.children || cell.children.length === 0) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  for (const child of cell.children) {
+    if (typeof child === "string") {
+      parts.push(child);
+    } else if (isLawNode(child) && child.tag === "Sentence") {
+      const text =
+        child.children?.map((c) => (typeof c === "string" ? c : "")).join("") ??
+        "";
+      if (text) {
+        parts.push(text);
+      }
+    } else if (isLawNode(child)) {
+      // Recurse into other structural elements within cells
+      const text = extractCellText(child);
+      if (text) {
+        parts.push(text);
+      }
+    }
+  }
+
+  return parts.join(" ");
+}
+
+/**
+ * Convert a Table node into a Markdown table string.
+ *
+ * Handles colspan (fills extra empty cells) and rowspan (duplicates content
+ * into subsequent rows) to produce a valid rectangular Markdown table.
+ */
+function renderTable(node: LawNode): string {
+  if (!node.children || node.children.length === 0) {
+    return "";
+  }
+
+  const rows = node.children.filter(
+    (c): c is LawNode =>
+      isLawNode(c) && (c.tag === "TableRow" || c.tag === "TableHeaderRow"),
+  );
+
+  if (rows.length === 0) {
+    return "";
+  }
+
+  // Phase 1: Build a 2D grid resolving colspan and rowspan.
+  // rowspanTracker[col] = { text, remaining } tracks active rowspans.
+  const rowspanTracker: Map<number, { text: string; remaining: number }> =
+    new Map();
+  const grid: string[][] = [];
+
+  for (const row of rows) {
+    const cells =
+      row.children?.filter(
+        (c): c is LawNode =>
+          isLawNode(c) &&
+          (c.tag === "TableColumn" || c.tag === "TableHeaderColumn"),
+      ) ?? [];
+
+    const gridRow: string[] = [];
+    let cellIdx = 0;
+    let col = 0;
+
+    // Fill cells for this row
+    while (cellIdx < cells.length || rowspanTracker.has(col)) {
+      // Check if this column is occupied by a previous rowspan
+      const span = rowspanTracker.get(col);
+      if (span && span.remaining > 0) {
+        gridRow.push(span.text);
+        span.remaining--;
+        if (span.remaining === 0) {
+          rowspanTracker.delete(col);
+        }
+        col++;
+        continue;
+      }
+
+      // No more source cells to process
+      if (cellIdx >= cells.length) {
+        break;
+      }
+
+      const cell = cells[cellIdx];
+      const text = extractCellText(cell);
+      const colspan = parseInt(cell.attr?.["colspan"] ?? "1", 10);
+      const rowspan = parseInt(cell.attr?.["rowspan"] ?? "1", 10);
+
+      // Place the cell text
+      gridRow.push(text);
+
+      // Register rowspan for subsequent rows
+      if (rowspan > 1) {
+        rowspanTracker.set(col, { text, remaining: rowspan - 1 });
+      }
+
+      col++;
+
+      // Handle colspan: add empty cells for the spanned columns
+      for (let i = 1; i < colspan; i++) {
+        gridRow.push("");
+        if (rowspan > 1) {
+          rowspanTracker.set(col, { text: "", remaining: rowspan - 1 });
+        }
+        col++;
+      }
+
+      cellIdx++;
+    }
+
+    grid.push(gridRow);
+  }
+
+  if (grid.length === 0) {
+    return "";
+  }
+
+  // Phase 2: Render the grid as Markdown.
+  // Determine max column count for consistent formatting.
+  const maxCols = Math.max(...grid.map((r) => r.length));
+
+  const lines: string[] = [];
+  for (let i = 0; i < grid.length; i++) {
+    // Pad row to maxCols
+    const row = grid[i];
+    while (row.length < maxCols) {
+      row.push("");
+    }
+
+    // Escape pipe characters in cell text
+    const formatted = row.map((cell) => ` ${cell.replace(/\|/g, "\\|")} `);
+    lines.push(`|${formatted.join("|")}|`);
+
+    // Add separator after the first row (header)
+    if (i === 0) {
+      const sep = row.map(() => " --- ");
+      lines.push(`|${sep.join("|")}|`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Convert a TableStruct node (optional title + Table) into text.
+ */
+function renderTableStruct(node: LawNode): string {
+  const parts: string[] = [];
+
+  if (!node.children) {
+    return "";
+  }
+
+  const titleNode = findChildByTag(node, "TableStructTitle");
+  if (titleNode) {
+    const titleText = titleNode.children
+      ?.map((c) => (typeof c === "string" ? c : ""))
+      .join("")
+      .trim();
+    if (titleText) {
+      parts.push(titleText);
+    }
+  }
+
+  const tableNode = findChildByTag(node, "Table");
+  if (tableNode) {
+    const tableText = renderTable(tableNode);
+    if (tableText) {
+      parts.push(tableText);
+    }
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Append rendered TableStruct content to a lines array.
+ * Used by full-law rendering functions that accumulate lines.
+ */
+function renderTableStructLines(node: LawNode, lines: string[]): void {
+  const text = renderTableStruct(node);
+  if (text) {
+    lines.push(text);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Text extraction
 // ---------------------------------------------------------------------------
 
@@ -133,8 +328,11 @@ function extractText(node: LawNode | string): string {
     return "";
   }
 
-  if (node.tag === "Table" || node.tag === "TableStruct") {
-    return TABLE_PLACEHOLDER;
+  if (node.tag === "TableStruct") {
+    return renderTableStruct(node);
+  }
+  if (node.tag === "Table") {
+    return renderTable(node);
   }
   if (node.tag === "Fig" || node.tag === "FigStruct") {
     return FIGURE_PLACEHOLDER;
@@ -158,10 +356,27 @@ function extractText(node: LawNode | string): string {
 function renderArticleBody(article: LawNode): string {
   const lines: string[] = [];
 
-  const paragraphs = findChildrenByTag(article, "Paragraph");
+  if (!article.children) {
+    return "";
+  }
 
-  for (const paragraph of paragraphs) {
-    renderParagraph(paragraph, lines);
+  for (const child of article.children) {
+    if (!isLawNode(child)) {
+      continue;
+    }
+    if (child.tag === "Paragraph") {
+      renderParagraph(child, lines);
+    } else if (child.tag === "TableStruct") {
+      const tableText = renderTableStruct(child);
+      if (tableText) {
+        lines.push(tableText);
+      }
+    } else if (child.tag === "Table") {
+      const tableText = renderTable(child);
+      if (tableText) {
+        lines.push(tableText);
+      }
+    }
   }
 
   return lines.join("\n");
@@ -185,6 +400,12 @@ function renderParagraph(paragraph: LawNode, lines: string[]): void {
 
   // Render items within this paragraph
   renderChildItems(paragraph, lines, 0);
+
+  // Render any TableStruct children of this paragraph
+  const tableStructs = findChildrenByTag(paragraph, "TableStruct");
+  for (const ts of tableStructs) {
+    renderTableStructLines(ts, lines);
+  }
 }
 
 /**
@@ -234,6 +455,12 @@ function renderItem(item: LawNode, lines: string[], depth: number): void {
   // Recurse into deeper subitems (Subitem1 -> Subitem2 -> ...)
   const nextDepth = depth + 1;
   renderChildItems(item, lines, nextDepth);
+
+  // Render any TableStruct children of this item
+  const tableStructs = findChildrenByTag(item, "TableStruct");
+  for (const ts of tableStructs) {
+    renderTableStructLines(ts, lines);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +795,8 @@ export function parseFullLaw(root: LawNode): string {
         renderSupplProvision(child, lines);
       } else if (child.tag === "Preamble") {
         renderPreamble(child, lines);
+      } else if (child.tag === "AppdxTable") {
+        renderAppdxTable(child, lines);
       }
     }
   }
@@ -620,6 +849,8 @@ function renderProvision(node: LawNode, lines: string[]): void {
     } else if (child.tag === "Paragraph") {
       // Standalone paragraphs outside articles (rare but possible).
       renderParagraph(child, lines);
+    } else if (child.tag === "TableStruct") {
+      renderTableStructLines(child, lines);
     }
   }
 }
@@ -648,6 +879,8 @@ function renderStructural(node: LawNode, lines: string[]): void {
       renderArticleForFullLaw(child, lines);
     } else if (child.tag === "Paragraph") {
       renderParagraph(child, lines);
+    } else if (child.tag === "TableStruct") {
+      renderTableStructLines(child, lines);
     }
   }
 }
@@ -669,9 +902,17 @@ function renderArticleForFullLaw(article: LawNode, lines: string[]): void {
     lines.push(title);
   }
 
-  const paragraphs = findChildrenByTag(article, "Paragraph");
-  for (const paragraph of paragraphs) {
-    renderParagraph(paragraph, lines);
+  if (article.children) {
+    for (const child of article.children) {
+      if (!isLawNode(child)) {
+        continue;
+      }
+      if (child.tag === "Paragraph") {
+        renderParagraph(child, lines);
+      } else if (child.tag === "TableStruct") {
+        renderTableStructLines(child, lines);
+      }
+    }
   }
 
   // Blank line after each article for readability.
@@ -710,6 +951,38 @@ function renderSupplProvision(node: LawNode, lines: string[]): void {
       renderParagraph(child, lines);
     } else if (STRUCTURAL_TAGS.has(child.tag)) {
       renderStructural(child, lines);
+    } else if (child.tag === "TableStruct") {
+      renderTableStructLines(child, lines);
+    }
+  }
+}
+
+/**
+ * Render AppdxTable (別表).
+ */
+function renderAppdxTable(node: LawNode, lines: string[]): void {
+  if (!node.children) return;
+
+  lines.push("");
+
+  for (const child of node.children) {
+    if (!isLawNode(child)) continue;
+
+    if (child.tag === "AppdxTableTitle") {
+      lines.push(extractText(child).trim());
+      lines.push("");
+    } else if (child.tag === "TableStruct") {
+      renderTableStructLines(child, lines);
+    } else if (child.tag === "Table") {
+      const tableText = renderTable(child);
+      if (tableText) lines.push(tableText);
+    } else if (child.tag === "Article") {
+      renderArticleForFullLaw(child, lines);
+    } else if (child.tag === "Paragraph") {
+      renderParagraph(child, lines);
+    } else if (child.tag === "Item") {
+      // Some AppdxTable have Item children directly
+      renderItem(child, lines, 0);
     }
   }
 }

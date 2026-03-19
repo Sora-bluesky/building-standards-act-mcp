@@ -49,9 +49,7 @@ ${strings.map((s) => `<si><t>${s}</t></si>`).join("\n")}
         .map((cell, ci) => {
           const ref = `${cols[ci]}${ri + 1}`;
           const idx = stringIndex.get(cell) ?? 0;
-          // Put t="s" before r="..." to match the source code's regex pattern
-          // (the regex requires t to appear as the first attribute after <c)
-          return `<c t="s" r="${ref}"><v>${idx}</v></c>`;
+          return `<c r="${ref}" s="1" t="s"><v>${idx}</v></c>`;
         })
         .join("");
       return `<row r="${ri + 1}">${cellsXml}</row>`;
