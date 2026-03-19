@@ -1,5 +1,6 @@
 import { getLawData } from "./egov-client.js";
 import { parseArticleStructured } from "./egov-parser.js";
+import { formatArticleRef } from "./errors.js";
 import { LawRegistry } from "./law-registry.js";
 import type { ArticleAnalysis, StructuredArticle } from "./types.js";
 
@@ -82,7 +83,7 @@ export async function analyzeArticle(
 
   if (!article) {
     throw new Error(
-      `${preset.title}に第${articleNumber}条が見つかりませんでした。`,
+      `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
     );
   }
 

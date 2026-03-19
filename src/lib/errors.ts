@@ -32,6 +32,23 @@ export class ArticleNotFoundError extends Error {
   }
 }
 
+/**
+ * Format an article number reference for display.
+ * Ensures the output always has the form "第X条" regardless of input format.
+ *
+ * Examples:
+ *   "20"           -> "第20条"
+ *   "第20条"       -> "第20条"
+ *   "第129条の2の3" -> "第129条の2の3"
+ *   "6_2"          -> "第6_2条"
+ */
+export function formatArticleRef(input: string): string {
+  let s = input.trim();
+  if (!s.startsWith("第")) s = `第${s}`;
+  if (!s.endsWith("条")) s = `${s}条`;
+  return s;
+}
+
 export class KokujiNotFoundError extends Error {
   public readonly kokujiName: string;
 

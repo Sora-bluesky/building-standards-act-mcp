@@ -1,5 +1,6 @@
 import { getLawData } from "./egov-client.js";
 import { parseArticle } from "./egov-parser.js";
+import { formatArticleRef } from "./errors.js";
 import { LawRegistry } from "./law-registry.js";
 import type { CitationVerification } from "./types.js";
 
@@ -113,7 +114,7 @@ export async function verifyCitation(
         law_name: preset.title,
         article_number: articleNumber,
         status: "article_not_found",
-        error_message: `${preset.title}に第${articleNumber}条が見つかりませんでした。`,
+        error_message: `${preset.title}に${formatArticleRef(articleNumber)}が見つかりませんでした。`,
       };
     }
 

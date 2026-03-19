@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-19
+
+### Fixed
+
+- **get_kokuji: MLIT PDF pipeline fully restored** — Excel cell parser regex failed to capture `t="s"` attribute, causing all shared strings (titles, PDF URLs) to be returned as numeric indices instead of resolved text. Two-phase attribute parsing eliminates attribute-order dependency.
+- **get_kokuji: Excel column alignment** — Self-closing cells (`<c r="G4" s="9"/>`) were ignored, causing column misalignment. Parser now uses `r` attribute for position-based column placement.
+- **Article number parsing for branched articles** — `normalizeArticleNumber` failed for "第129条の2の3" and "第6条の3" formats because `条$` only stripped trailing 条. Changed to `条(の|$)` to handle mid-string 条.
+- **Error message duplication** — "第第129条の2の3条" fixed via `formatArticleRef()` helper that normalizes display formatting across 6 files.
+
+### Added
+
+- **Markdown table rendering in law text** — e-Gov API XML `<Table>` elements are now converted to Markdown tables instead of `[表]` placeholder. Handles `colspan` (up to 11) and `rowspan` (up to 14).
+- **AppdxTable (別表) rendering** — `parseFullLaw()` now processes appended tables (別表第一 etc.) in law bodies.
+- **Table rendering in nested structures** — Tables inside Paragraph, Item, and Subitem nodes are now rendered.
+- Tests expanded: 373 → 379 across 29 test files
+
+## [1.0.1] - 2026-03-18
+
+### Added
+
+- UA value related presets: 建築物エネルギー消費性能基準等を定める省令
+- 2 kokuji presets: UA値算出方法告示, 断熱等性能等級告示
+- Law presets: 115 → 116, kokuji presets: 7 → 9
+
+## [1.0.0] - 2026-03-18
+
+### Added
+
+- Official v1.0.0 release: all 5 phases / 19 tasks complete
+- stdio + HTTP dual transport stable operation confirmed
+
 ## [0.5.0] - 2026-03-18
 
 ### Added
@@ -97,7 +128,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated npm publish and GitHub Release via release.yml
 - Unit and integration tests (107 tests, 92.45% coverage)
 
-[0.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.1.0
-[0.2.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.2.0
-[0.3.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.3.0
+[1.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.1.0
+[1.0.1]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.0.1
+[1.0.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v1.0.0
+[0.5.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.4.0
+[0.3.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.3.0
+[0.2.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.2.0
+[0.1.0]: https://github.com/Sora-bluesky/building-standards-act-mcp/releases/tag/v0.1.0

@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LawRegistry } from "../lib/law-registry.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
+import { formatArticleRef } from "../lib/errors.js";
 import type {
   BatchFetchItem,
   BatchFetchResult,
@@ -126,7 +127,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                   law_name: preset.title,
                   article_number: req.article_number,
                   status: "article_not_found",
-                  error_message: `${preset.title}に第${req.article_number}条が見つかりませんでした。`,
+                  error_message: `${preset.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
                 });
               } else {
                 results.push({
@@ -146,7 +147,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                   law_name: preset.title,
                   article_number: req.article_number,
                   status: "article_not_found",
-                  error_message: `${preset.title}に第${req.article_number}条が見つかりませんでした。`,
+                  error_message: `${preset.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
                 });
               } else {
                 results.push({

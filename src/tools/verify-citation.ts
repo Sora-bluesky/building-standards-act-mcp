@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { verifyCitation } from "../lib/citation-verifier.js";
+import { formatArticleRef } from "../lib/errors.js";
 import type { CitationVerification } from "../lib/types.js";
 
 const MAX_CITATIONS = 10;
@@ -46,7 +47,9 @@ function formatResults(results: CitationVerification[]): string {
           : r.status === "error"
             ? "ERR"
             : "N/A";
-    lines.push(`### [${icon}] ${r.law_name} 第${r.article_number}条`);
+    lines.push(
+      `### [${icon}] ${r.law_name} ${formatArticleRef(r.article_number)}`,
+    );
 
     if (r.match_score !== undefined) {
       lines.push(`- 一致度: ${(r.match_score * 100).toFixed(0)}%`);
