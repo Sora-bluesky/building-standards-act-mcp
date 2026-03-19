@@ -14,20 +14,41 @@ const schema = {
     .describe("告示名（例: 耐火構造の構造方法を定める件、不燃材料を定める件）"),
 };
 
+/** Diagnostic info collected during fetchViaMlit for error reporting. */
+interface MlitDiagnostic {
+  pdfUrl: string | null;
+  error: string | null;
+}
+
 /**
  * Attempt to fetch kokuji text via the MLIT pipeline:
  * 1. Find the PDF URL from the MLIT Excel notice database
  * 2. Download the PDF and extract text
+ *
+ * Returns the text on success, or null with diagnostic info on failure.
  */
-async function fetchViaMlit(title: string): Promise<string | null> {
+async function fetchViaMlit(
+  title: string,
+  diagnostic?: MlitDiagnostic,
+): Promise<string | null> {
   const pdfUrl = await findKokujiPdfUrl(title);
+  if (diagnostic) {
+    diagnostic.pdfUrl = pdfUrl;
+  }
   if (!pdfUrl) {
+    if (diagnostic) {
+      diagnostic.error = "MLIT Excel から PDF URL が見つかりませんでした";
+    }
     return null;
   }
 
   try {
     return await extractTextFromPdf(pdfUrl);
-  } catch {
+  } catch (err) {
+    if (diagnostic) {
+      diagnostic.error =
+        err instanceof Error ? err.message : "PDF テキスト抽出に失敗";
+    }
     return null;
   }
 }
@@ -73,7 +94,8 @@ export function registerGetKokujiTool(server: McpServer): void {
 
         if (preset) {
           // Step 2a: Try MLIT pipeline (Excel → PDF → text)
-          const mlitText = await fetchViaMlit(preset.title);
+          const diag: MlitDiagnostic = { pdfUrl: null, error: null };
+          const mlitText = await fetchViaMlit(preset.title, diag);
 
           if (mlitText) {
             const text = [
@@ -116,6 +138,14 @@ export function registerGetKokujiTool(server: McpServer): void {
           }
 
           // Preset found but no text available from any source
+          const diagLines = [];
+          if (diag.pdfUrl) {
+            diagLines.push(`PDF URL: ${diag.pdfUrl}`);
+          }
+          if (diag.error) {
+            diagLines.push(`原因: ${diag.error}`);
+          }
+
           const text = [
             `【告示】${preset.title}`,
             `法令番号: ${preset.law_num}`,
@@ -124,6 +154,8 @@ export function registerGetKokujiTool(server: McpServer): void {
             "告示本文の取得に失敗しました。",
             "国土交通省の告示データベース（PDF）および e-Gov 法令検索の",
             "いずれからも取得できませんでした。",
+            ...(diagLines.length > 0 ? ["", "診断情報:", ...diagLines] : []),
+            "",
             "ネットワーク接続を確認するか、時間をおいて再度お試しください。",
           ].join("\n");
 

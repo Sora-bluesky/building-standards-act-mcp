@@ -6,6 +6,10 @@ const EXCEL_URL_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const EXCEL_DATA_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
+// User-Agent for MLIT requests — some government sites block requests without it
+const MLIT_USER_AGENT =
+  "BuildingStandardsActMCP/1.1 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
+
 /** A single entry parsed from the MLIT notice Excel file. */
 export interface MlitNoticeEntry {
   title: string;
@@ -35,6 +39,8 @@ const excelDataCache = createCache<MlitNoticeEntry[]>(
 const EXCEL_URL_CACHE_KEY = "mlit:excel_url";
 const EXCEL_DATA_CACHE_KEY = "mlit:excel_data";
 
+const FETCH_HEADERS = { "User-Agent": MLIT_USER_AGENT };
+
 /**
  * Fetch binary data from a URL with timeout and abort handling.
  */
@@ -43,7 +49,10 @@ async function fetchBuffer(url: string): Promise<ArrayBuffer | null> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: FETCH_HEADERS,
+    });
     if (!response.ok) {
       return null;
     }
@@ -63,7 +72,10 @@ async function fetchText(url: string): Promise<string | null> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: FETCH_HEADERS,
+    });
     if (!response.ok) {
       return null;
     }

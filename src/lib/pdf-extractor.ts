@@ -2,6 +2,8 @@ import { createCache } from "./cache.js";
 
 const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
+const PDF_USER_AGENT =
+  "BuildingStandardsActMCP/1.1 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
 
 const pdfTextCache = createCache<string>("pdf-text", PDF_TEXT_CACHE_TTL);
 
@@ -17,7 +19,10 @@ async function fetchPdfBuffer(url: string): Promise<Uint8Array> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": PDF_USER_AGENT },
+    });
     if (!response.ok) {
       throw new Error(
         `PDF取得に失敗しました (HTTP ${response.status}): ${url}`,
