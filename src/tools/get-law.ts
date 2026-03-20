@@ -9,7 +9,11 @@ const schema = {
   law_name: z
     .string()
     .describe("法令名（正式名称、略称のいずれか。例: 建築基準法、建基法）"),
-  article_number: z.string().describe("条文番号（例: 第20条、20、第6条の2）"),
+  article_number: z
+    .string()
+    .describe(
+      "条文番号（例: 第20条、20、第6条の2、附則、附則第3条、別表第一）",
+    ),
   format: z
     .enum(["text", "structured"])
     .default("text")
@@ -21,7 +25,7 @@ const schema = {
 export function registerGetLawTool(server: McpServer): void {
   server.tool(
     "get_law",
-    "条番号を指定して法令の条文を取得する。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。",
+    "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。",
     schema,
     async ({ law_name, article_number, format }) => {
       try {

@@ -4,6 +4,7 @@ import {
   LawNotFoundError,
   ArticleNotFoundError,
   KokujiNotFoundError,
+  formatArticleRef,
 } from "../../src/lib/errors.js";
 
 describe("EgovApiError", () => {
@@ -107,5 +108,31 @@ describe("KokujiNotFoundError", () => {
   it("stores the kokujiName property", () => {
     const error = new KokujiNotFoundError("平成12年建設省告示第1347号");
     expect(error.kokujiName).toBe("平成12年建設省告示第1347号");
+  });
+});
+
+describe("formatArticleRef", () => {
+  it('formats "20" to "第20条"', () => {
+    expect(formatArticleRef("20")).toBe("第20条");
+  });
+
+  it('keeps "第20条" as-is', () => {
+    expect(formatArticleRef("第20条")).toBe("第20条");
+  });
+
+  it('returns "附則" as-is', () => {
+    expect(formatArticleRef("附則")).toBe("附則");
+  });
+
+  it('returns "附則第3条" as-is', () => {
+    expect(formatArticleRef("附則第3条")).toBe("附則第3条");
+  });
+
+  it('returns "別表第一" as-is', () => {
+    expect(formatArticleRef("別表第一")).toBe("別表第一");
+  });
+
+  it('returns "別表第1" as-is', () => {
+    expect(formatArticleRef("別表第1")).toBe("別表第1");
   });
 });

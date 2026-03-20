@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-20
+
+### Added
+
+- **附則・別表サポート**: `get_law` ツールで附則（SupplProvision）と別表（AppdxTable）を取得可能に
+  - `附則` — 原始附則の全文を取得
+  - `附則第3条` — 附則内の特定条文を取得
+  - `附則（令和4年法律第69号）` — 改正附則を法令番号指定で取得（漢数字・算用数字の両方対応）
+  - `別表第一` / `別表第1` / `別表1` — 別表を番号指定で取得（漢数字・算用数字の両方対応）
+- `verify_citation`、`get_laws_batch` でも附則・別表の検証・一括取得が自動対応
+- `formatArticleRef()` が附則・別表パターンをそのまま表示するよう修正
+
 ## [1.2.1] - 2026-03-19
 
 ### Fixed
