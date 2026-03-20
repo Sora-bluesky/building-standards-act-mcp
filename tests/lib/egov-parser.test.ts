@@ -1602,4 +1602,205 @@ describe("egov-parser", () => {
       });
     });
   });
+
+  // -----------------------------------------------------------------
+  // Amendment SupplProvision matching with date in AmendLawNum
+  // -----------------------------------------------------------------
+
+  describe("findAmendmentSupplProvision with date in AmendLawNum", () => {
+    // Law tree with AmendLawNum containing a date portion (e.g., 六月一七日)
+    // This mimics real e-Gov XML where AmendLawNum includes the promulgation date.
+    const LAW_WITH_DATED_AMEND: LawNode = {
+      tag: "Law",
+      attr: { Era: "Showa", Year: "25", Lang: "ja" },
+      children: [
+        {
+          tag: "LawBody",
+          children: [
+            { tag: "LawTitle", children: ["テスト法"] },
+            {
+              tag: "MainProvision",
+              children: [
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["テスト条文。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Original supplementary provision (no AmendLawNum)
+            {
+              tag: "SupplProvision",
+              children: [
+                {
+                  tag: "SupplProvisionLabel",
+                  children: ["附　則"],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["原始附則。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Amendment with DATE in AmendLawNum (令和四年六月一七日法律第六九号)
+            {
+              tag: "SupplProvision",
+              attr: { AmendLawNum: "令和四年六月一七日法律第六九号" },
+              children: [
+                {
+                  tag: "SupplProvisionLabel",
+                  children: ["附　則（令和四年六月一七日法律第六九号）抄"],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["令和四年改正附則の施行規定。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Another amendment with date (令和六年四月一九日政令第一七二号)
+            {
+              tag: "SupplProvision",
+              attr: { AmendLawNum: "令和六年四月一九日政令第一七二号" },
+              children: [
+                {
+                  tag: "SupplProvisionLabel",
+                  children: ["附　則（令和六年四月一九日政令第一七二号）"],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["令和六年政令改正附則の施行規定。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    it("matches user input without date against AmendLawNum with date (law)", () => {
+      // User: 令和4年法律第69号 -> XML: 令和四年六月一七日法律第六九号
+      const result = parseArticle(
+        LAW_WITH_DATED_AMEND,
+        "附則（令和4年法律第69号）",
+      );
+      expect(result).not.toBeNull();
+      expect(result!.article_num).toBe("suppl");
+      expect(result!.text).toContain("令和四年改正附則の施行規定");
+    });
+
+    it("matches user input without date against AmendLawNum with date (cabinet order)", () => {
+      // User: 令和6年政令第172号 -> XML: 令和六年四月一九日政令第一七二号
+      const result = parseArticle(
+        LAW_WITH_DATED_AMEND,
+        "附則（令和6年政令第172号）",
+      );
+      expect(result).not.toBeNull();
+      expect(result!.article_num).toBe("suppl");
+      expect(result!.text).toContain("令和六年政令改正附則の施行規定");
+    });
+
+    it("does not match when law type differs", () => {
+      // User: 令和4年法律第69号 vs XML: ...政令第六九号 — law type mismatch
+      const result = parseArticle(
+        LAW_WITH_DATED_AMEND,
+        "附則（令和6年法律第172号）",
+      );
+      // Should not match the 政令 amendment; no 法律第172号 exists
+      expect(result).toBeNull();
+    });
+
+    it("does not match when year differs", () => {
+      // User: 令和5年法律第69号 vs XML: 令和四年...法律第六九号 — year mismatch
+      const result = parseArticle(
+        LAW_WITH_DATED_AMEND,
+        "附則（令和5年法律第69号）",
+      );
+      expect(result).toBeNull();
+    });
+
+    it("still matches kanji input against dated AmendLawNum", () => {
+      // User: 令和四年法律第六十九号 -> XML: 令和四年六月一七日法律第六九号
+      const result = parseArticle(
+        LAW_WITH_DATED_AMEND,
+        "附則（令和四年法律第六十九号）",
+      );
+      expect(result).not.toBeNull();
+      expect(result!.text).toContain("令和四年改正附則の施行規定");
+    });
+  });
 });

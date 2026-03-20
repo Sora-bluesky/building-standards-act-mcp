@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-03-20
+
+### Fixed
+
+- **改正附則マッチング修正**: `附則（令和4年法律第69号）` が e-Gov XML の `AmendLawNum="令和四年六月一七日法律第六九号"` にマッチしない問題を修正。日付部分を無視し元号・年・法令種別・番号の4要素で構造的に比較する方式に変更。位取り記法でない漢数字（六九, 一七）にも対応
+
 ## [1.3.0] - 2026-03-20
 
 ### Added

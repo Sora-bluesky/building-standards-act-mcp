@@ -764,27 +764,83 @@ function findOriginalSupplProvision(root: LawNode): LawNode | null {
 }
 
 /**
+ * Parse a law number string into structured components.
+ * Handles both user input (令和4年法律第69号) and XML attribute (令和四年六月一七日法律第六九号).
+ */
+interface ParsedLawNum {
+  era: string;
+  year: number;
+  lawType: string;
+  number: number;
+}
+
+/**
+ * Aggressively normalize kanji digits in a string.
+ * First applies standard normalizeKanjiNumbers (handles 十/百 notation like 六十九 -> 69),
+ * then converts remaining positional kanji digit sequences (like 一七 -> 17, 六九 -> 69)
+ * that appear in e-Gov XML AmendLawNum attributes.
+ */
+function normalizeKanjiNumbersAggressive(s: string): string {
+  const pass1 = normalizeKanjiNumbers(s);
+  return pass1.replace(/[〇一二三四五六七八九]+/g, (match) => {
+    return [...match]
+      .map((ch) => {
+        const d = KANJI_DIGIT_MAP[ch];
+        return d !== undefined ? String(d) : ch;
+      })
+      .join("");
+  });
+}
+
+function parseLawNum(s: string): ParsedLawNum | null {
+  const normalized = normalizeKanjiNumbersAggressive(s);
+  const m = normalized.match(
+    /(明治|大正|昭和|平成|令和)(\d+)年.*?(法律|政令|勅令|省令|府令|規則)第(\d+)号/,
+  );
+  if (!m) return null;
+  return { era: m[1], year: Number(m[2]), lawType: m[3], number: Number(m[4]) };
+}
+
+/**
+ * Match two law number strings by comparing era, year, law type, and number.
+ * Ignores the date portion (e.g., 六月一七日) that appears in XML AmendLawNum attributes.
+ */
+function matchAmendLawNum(input: string, attrValue: string): boolean {
+  const a = parseLawNum(input);
+  const b = parseLawNum(attrValue);
+  if (!a || !b) return false;
+  return (
+    a.era === b.era &&
+    a.year === b.year &&
+    a.lawType === b.lawType &&
+    a.number === b.number
+  );
+}
+
+/**
  * Find an amendment SupplProvision by law number.
  * Matches against AmendLawNum attribute and SupplProvisionLabel text,
- * normalizing kanji numerals to arabic for comparison.
+ * using structural comparison (era, year, law type, number) to ignore
+ * date portions that appear in XML attributes.
  */
 function findAmendmentSupplProvision(
   root: LawNode,
   amendLawNum: string,
 ): LawNode | null {
   const supplNodes = findSupplProvisionNodes(root);
-  const normalizedInput = normalizeKanjiNumbers(amendLawNum);
 
   return (
     supplNodes.find((n) => {
+      // 1. Structural match against AmendLawNum attribute
       const attrVal = n.attr?.["AmendLawNum"];
-      if (attrVal && normalizeKanjiNumbers(attrVal).includes(normalizedInput)) {
+      if (attrVal && matchAmendLawNum(amendLawNum, attrVal)) {
         return true;
       }
+      // 2. Fallback: match against SupplProvisionLabel text
       const label = findChildByTag(n, "SupplProvisionLabel");
       if (label) {
-        const labelText = normalizeKanjiNumbers(extractText(label));
-        if (labelText.includes(normalizedInput)) return true;
+        const labelText = extractText(label);
+        if (matchAmendLawNum(amendLawNum, labelText)) return true;
       }
       return false;
     }) ?? null
