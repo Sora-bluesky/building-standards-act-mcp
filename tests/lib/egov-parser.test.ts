@@ -1231,4 +1231,375 @@ describe("egov-parser", () => {
       expect(fullText).toContain("| 1地域 | 0.46 |");
     });
   });
+
+  // -----------------------------------------------------------------
+  // SupplProvision (附則) and AppdxTable (別表) tests
+  // -----------------------------------------------------------------
+
+  describe("SupplProvision and AppdxTable support", () => {
+    // Simple 2x2 table for AppdxTable tests
+    const APPDX_TABLE: LawNode = {
+      tag: "Table",
+      children: [
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["用途"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["面積"] }],
+            },
+          ],
+        },
+        {
+          tag: "TableRow",
+          children: [
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["劇場"] }],
+            },
+            {
+              tag: "TableColumn",
+              children: [{ tag: "Sentence", children: ["200㎡"] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    // Test law tree with SupplProvision and AppdxTable
+    const TEST_LAW_WITH_SUPPL_APPDX: LawNode = {
+      tag: "Law",
+      attr: { Era: "Showa", Year: "25", Lang: "ja" },
+      children: [
+        {
+          tag: "LawBody",
+          children: [
+            { tag: "LawTitle", children: ["テスト法"] },
+            {
+              tag: "MainProvision",
+              children: [
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: [
+                                "この法律は、テストのために制定する。",
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Original supplementary provision
+            {
+              tag: "SupplProvision",
+              children: [
+                {
+                  tag: "SupplProvisionLabel",
+                  children: ["附　則"],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["この法律は、公布の日から施行する。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "2" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第二条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: ["経過措置に関する規定。"],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Amendment supplementary provision
+            {
+              tag: "SupplProvision",
+              attr: { AmendLawNum: "令和四年法律第六十九号" },
+              children: [
+                {
+                  tag: "SupplProvisionLabel",
+                  children: ["附　則（令和四年六月十七日法律第六十九号）抄"],
+                },
+                {
+                  tag: "Article",
+                  attr: { Num: "1" },
+                  children: [
+                    { tag: "ArticleTitle", children: ["第一条"] },
+                    {
+                      tag: "Paragraph",
+                      attr: { Num: "1" },
+                      children: [
+                        { tag: "ParagraphNum" },
+                        {
+                          tag: "ParagraphSentence",
+                          children: [
+                            {
+                              tag: "Sentence",
+                              children: [
+                                "この法律は、令和五年四月一日から施行する。",
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            // Appended table 1
+            {
+              tag: "AppdxTable",
+              attr: { Num: "1" },
+              children: [
+                {
+                  tag: "AppdxTableTitle",
+                  children: ["別表第一（第六条関係）"],
+                },
+                {
+                  tag: "TableStruct",
+                  children: [APPDX_TABLE],
+                },
+              ],
+            },
+            // Appended table 2
+            {
+              tag: "AppdxTable",
+              attr: { Num: "2" },
+              children: [
+                {
+                  tag: "AppdxTableTitle",
+                  children: ["別表第二（第四十八条関係）"],
+                },
+                {
+                  tag: "TableStruct",
+                  children: [
+                    {
+                      tag: "Table",
+                      children: [
+                        {
+                          tag: "TableRow",
+                          children: [
+                            {
+                              tag: "TableColumn",
+                              children: [
+                                { tag: "Sentence", children: ["地域"] },
+                              ],
+                            },
+                            {
+                              tag: "TableColumn",
+                              children: [
+                                { tag: "Sentence", children: ["制限"] },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    describe("parseArticle with 附則", () => {
+      it('returns full original supplementary provision for "附則"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "附則");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("suppl");
+        expect(result!.article_title).toContain("附");
+        expect(result!.text).toContain("公布の日から施行する");
+        expect(result!.text).toContain("経過措置に関する規定");
+      });
+
+      it('returns specific article within supplementary provision for "附則第1条"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "附則第1条");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("1");
+        expect(result!.text).toContain("公布の日から施行する");
+        expect(result!.text).not.toContain("経過措置に関する規定");
+      });
+
+      it('returns specific article within supplementary provision for "附則第2条"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "附則第2条");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("2");
+        expect(result!.text).toContain("経過措置に関する規定");
+      });
+
+      it("returns amendment supplementary provision by law number (arabic)", () => {
+        const result = parseArticle(
+          TEST_LAW_WITH_SUPPL_APPDX,
+          "附則（令和4年法律第69号）",
+        );
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("suppl");
+        expect(result!.article_title).toContain("令和四年");
+        expect(result!.text).toContain("令和五年四月一日から施行する");
+      });
+
+      it("returns amendment supplementary provision by law number (kanji)", () => {
+        const result = parseArticle(
+          TEST_LAW_WITH_SUPPL_APPDX,
+          "附則（令和四年法律第六十九号）",
+        );
+        expect(result).not.toBeNull();
+        expect(result!.text).toContain("令和五年四月一日から施行する");
+      });
+
+      it("returns null for non-existent article in supplementary provision", () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "附則第999条");
+        expect(result).toBeNull();
+      });
+    });
+
+    describe("parseArticle with 別表", () => {
+      it('returns appended table for "別表第一"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "別表第一");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("appdx_1");
+        expect(result!.article_title).toContain("別表第一");
+        expect(result!.text).toContain("劇場");
+        expect(result!.text).toContain("200㎡");
+      });
+
+      it('returns appended table for "別表第二"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "別表第二");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("appdx_2");
+        expect(result!.article_title).toContain("別表第二");
+        expect(result!.text).toContain("地域");
+      });
+
+      it('returns appended table for arabic number "別表第1"', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "別表第1");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("appdx_1");
+        expect(result!.text).toContain("劇場");
+      });
+
+      it('returns appended table for "別表1" (no 第)', () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "別表1");
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("appdx_1");
+      });
+
+      it("returns null for non-existent appended table", () => {
+        const result = parseArticle(TEST_LAW_WITH_SUPPL_APPDX, "別表第99");
+        expect(result).toBeNull();
+      });
+    });
+
+    describe("parseArticleStructured with 附則/別表", () => {
+      it("returns structured article for specific supplementary article", () => {
+        const result = parseArticleStructured(
+          TEST_LAW_WITH_SUPPL_APPDX,
+          "附則第1条",
+        );
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("1");
+        expect(result!.paragraphs).toHaveLength(1);
+        expect(result!.paragraphs[0].paragraph_sentence).toContain(
+          "公布の日から施行する",
+        );
+      });
+
+      it("returns pseudo structured article for full supplementary provision", () => {
+        const result = parseArticleStructured(
+          TEST_LAW_WITH_SUPPL_APPDX,
+          "附則",
+        );
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("suppl");
+        expect(result!.paragraphs).toHaveLength(1);
+        expect(result!.paragraphs[0].paragraph_sentence).toContain(
+          "公布の日から施行する",
+        );
+      });
+
+      it("returns pseudo structured article for appended table", () => {
+        const result = parseArticleStructured(
+          TEST_LAW_WITH_SUPPL_APPDX,
+          "別表第一",
+        );
+        expect(result).not.toBeNull();
+        expect(result!.article_num).toBe("appdx_1");
+        expect(result!.paragraphs).toHaveLength(1);
+        expect(result!.paragraphs[0].paragraph_sentence).toContain("劇場");
+      });
+    });
+
+    describe("parseFullLaw includes 附則 and 別表", () => {
+      it("includes supplementary provisions in full law output", () => {
+        const fullText = parseFullLaw(TEST_LAW_WITH_SUPPL_APPDX);
+        expect(fullText).toContain("附");
+        expect(fullText).toContain("公布の日から施行する");
+        expect(fullText).toContain("令和五年四月一日から施行する");
+      });
+
+      it("includes appended tables in full law output", () => {
+        const fullText = parseFullLaw(TEST_LAW_WITH_SUPPL_APPDX);
+        expect(fullText).toContain("別表第一（第六条関係）");
+        expect(fullText).toContain("別表第二（第四十八条関係）");
+        expect(fullText).toContain("劇場");
+      });
+    });
+  });
 });

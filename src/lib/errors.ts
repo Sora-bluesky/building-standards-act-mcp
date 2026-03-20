@@ -44,6 +44,8 @@ export class ArticleNotFoundError extends Error {
  */
 export function formatArticleRef(input: string): string {
   let s = input.trim();
+  // Special sections are displayed as-is (附則, 別表第一, etc.)
+  if (s.startsWith("附則") || s.startsWith("別表")) return s;
   if (!s.startsWith("第")) s = `第${s}`;
   if (!s.endsWith("条")) s = `${s}条`;
   return s;

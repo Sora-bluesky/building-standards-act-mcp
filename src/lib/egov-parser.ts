@@ -39,6 +39,161 @@ const STRUCTURAL_TITLE_TAGS = new Set([
 const INDENT_UNIT = "  ";
 
 // ---------------------------------------------------------------------------
+// Kanji numeral conversion
+// ---------------------------------------------------------------------------
+
+const KANJI_DIGIT_MAP: Record<string, number> = {
+  〇: 0,
+  一: 1,
+  二: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+};
+
+/**
+ * Parse a kanji numeral string into an arabic number.
+ * Handles up to hundreds (e.g. "六十九" -> 69, "百二十三" -> 123).
+ */
+function parseKanjiNumber(kanji: string): number | null {
+  if (kanji.length === 0) return null;
+
+  // Single digit shortcut
+  if (kanji.length === 1 && KANJI_DIGIT_MAP[kanji] !== undefined) {
+    return KANJI_DIGIT_MAP[kanji];
+  }
+
+  let result = 0;
+  let i = 0;
+
+  // Hundreds place
+  const hyakuIdx = kanji.indexOf("百");
+  if (hyakuIdx !== -1) {
+    if (hyakuIdx === 0) {
+      result += 100;
+    } else {
+      const d = KANJI_DIGIT_MAP[kanji[0]];
+      if (d === undefined) return null;
+      result += d * 100;
+    }
+    i = hyakuIdx + 1;
+  }
+
+  // Tens place
+  const juIdx = kanji.indexOf("十", i);
+  if (juIdx !== -1) {
+    if (juIdx === i) {
+      result += 10;
+    } else {
+      const d = KANJI_DIGIT_MAP[kanji[juIdx - 1]];
+      if (d === undefined) return null;
+      result += d * 10;
+      // Ensure we didn't skip characters
+      if (juIdx - 1 !== i) return null;
+    }
+    i = juIdx + 1;
+  }
+
+  // Ones place
+  if (i < kanji.length) {
+    const d = KANJI_DIGIT_MAP[kanji[i]];
+    if (d === undefined) return null;
+    result += d;
+    if (i + 1 !== kanji.length) return null;
+  }
+
+  return result === 0 && kanji !== "〇" ? null : result;
+}
+
+/**
+ * Convert a single kanji numeral to an arabic digit string.
+ * Shorthand for simple cases like table numbers (一 -> "1", 二 -> "2").
+ */
+function kanjiToArabic(kanji: string): string | null {
+  const n = parseKanjiNumber(kanji);
+  return n !== null ? String(n) : null;
+}
+
+/**
+ * Normalize a string by converting all kanji numeral sequences to arabic.
+ * Used for comparing amendment law numbers like "令和四年法律第六十九号" -> "令和4年法律第69号".
+ */
+function normalizeKanjiNumbers(s: string): string {
+  return s.replace(/[〇一二三四五六七八九十百]+/g, (match) => {
+    const n = parseKanjiNumber(match);
+    return n !== null ? String(n) : match;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Special section detection (附則 / 別表)
+// ---------------------------------------------------------------------------
+
+type SpecialSectionRequest =
+  | { type: "suppl_all" }
+  | { type: "suppl_article"; articleNumber: string }
+  | { type: "suppl_amendment"; amendLawNum: string }
+  | {
+      type: "suppl_amendment_article";
+      amendLawNum: string;
+      articleNumber: string;
+    }
+  | { type: "appdx_table"; tableNum: string };
+
+/**
+ * Detect if the article number input is a special section request
+ * (supplementary provisions or appended tables).
+ */
+function detectSpecialSection(input: string): SpecialSectionRequest | null {
+  const s = input.trim();
+
+  // 別表パターン: 別表第一, 別表第1, 別表1
+  const appdxMatch = s.match(/^別表[第]?([一二三四五六七八九十\d]+)/);
+  if (appdxMatch) {
+    const rawNum = appdxMatch[1];
+    const num = /^\d+$/.test(rawNum) ? rawNum : kanjiToArabic(rawNum);
+    if (num) return { type: "appdx_table", tableNum: num };
+  }
+  // Bare "別表" without a number
+  if (s === "別表") {
+    return { type: "appdx_table", tableNum: "1" };
+  }
+
+  // 附則パターン
+  if (s.startsWith("附則")) {
+    const rest = s.slice(2).trim();
+
+    if (rest === "") {
+      return { type: "suppl_all" };
+    }
+
+    // 附則（令和4年法律第69号） or 附則（令和4年法律第69号）第3条
+    const amendMatch = rest.match(/^[（(](.+?)[）)]\s*(.*)/);
+    if (amendMatch) {
+      const amendLawNum = amendMatch[1];
+      const afterAmend = amendMatch[2].trim();
+      if (afterAmend === "") {
+        return { type: "suppl_amendment", amendLawNum };
+      }
+      return {
+        type: "suppl_amendment_article",
+        amendLawNum,
+        articleNumber: afterAmend,
+      };
+    }
+
+    // 附則第3条 or 附則3
+    return { type: "suppl_article", articleNumber: rest };
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Article number normalization
 // ---------------------------------------------------------------------------
 
@@ -583,6 +738,254 @@ function findArticleNode(root: LawNode, articleNumber: string): LawNode | null {
 }
 
 // ---------------------------------------------------------------------------
+// SupplProvision / AppdxTable node search
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect all SupplProvision nodes from LawBody.
+ */
+function findSupplProvisionNodes(root: LawNode): LawNode[] {
+  const lawBody = findDeep(root, "LawBody");
+  if (!lawBody?.children) return [];
+  return lawBody.children.filter(
+    (c): c is LawNode => isLawNode(c) && c.tag === "SupplProvision",
+  );
+}
+
+/**
+ * Find the original (non-amendment) SupplProvision.
+ * The original one has no AmendLawNum attribute.
+ */
+function findOriginalSupplProvision(root: LawNode): LawNode | null {
+  const supplNodes = findSupplProvisionNodes(root);
+  return (
+    supplNodes.find((n) => !n.attr?.["AmendLawNum"]) ?? supplNodes[0] ?? null
+  );
+}
+
+/**
+ * Find an amendment SupplProvision by law number.
+ * Matches against AmendLawNum attribute and SupplProvisionLabel text,
+ * normalizing kanji numerals to arabic for comparison.
+ */
+function findAmendmentSupplProvision(
+  root: LawNode,
+  amendLawNum: string,
+): LawNode | null {
+  const supplNodes = findSupplProvisionNodes(root);
+  const normalizedInput = normalizeKanjiNumbers(amendLawNum);
+
+  return (
+    supplNodes.find((n) => {
+      const attrVal = n.attr?.["AmendLawNum"];
+      if (attrVal && normalizeKanjiNumbers(attrVal).includes(normalizedInput)) {
+        return true;
+      }
+      const label = findChildByTag(n, "SupplProvisionLabel");
+      if (label) {
+        const labelText = normalizeKanjiNumbers(extractText(label));
+        if (labelText.includes(normalizedInput)) return true;
+      }
+      return false;
+    }) ?? null
+  );
+}
+
+/**
+ * Find an AppdxTable node by table number.
+ * Tries Num attribute first, then falls back to title text matching.
+ */
+function findAppdxTableNode(root: LawNode, tableNum: string): LawNode | null {
+  const lawBody = findDeep(root, "LawBody");
+  if (!lawBody?.children) return null;
+
+  const appdxTables = lawBody.children.filter(
+    (c): c is LawNode => isLawNode(c) && c.tag === "AppdxTable",
+  );
+
+  // Primary: match by Num attribute
+  const byNum = appdxTables.find((n) => n.attr?.["Num"] === tableNum);
+  if (byNum) return byNum;
+
+  // Fallback: match by title text containing the number
+  return (
+    appdxTables.find((n) => {
+      const titleNode = findChildByTag(n, "AppdxTableTitle");
+      if (!titleNode) return false;
+      const titleText = extractText(titleNode).trim();
+      const normalizedTitle = normalizeKanjiNumbers(titleText);
+      return normalizedTitle.includes(`別表第${tableNum}`);
+    }) ?? null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SupplProvision / AppdxTable -> ParsedArticle conversion
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a SupplProvision node to a ParsedArticle.
+ */
+function supplProvisionToParsed(node: LawNode): ParsedArticle {
+  const labelNode = findChildByTag(node, "SupplProvisionLabel");
+  const label = labelNode ? extractText(labelNode).trim() : "附則";
+  const lines: string[] = [];
+  renderSupplProvision(node, lines);
+  const text = lines.join("\n").trim();
+  const references = detectReferences(text);
+  return {
+    article_num: "suppl",
+    article_caption: "",
+    article_title: label,
+    text,
+    ...(references.length > 0 ? { references } : {}),
+  };
+}
+
+/**
+ * Convert an AppdxTable node to a ParsedArticle.
+ */
+function appdxTableToParsed(node: LawNode): ParsedArticle {
+  const titleNode = findChildByTag(node, "AppdxTableTitle");
+  const title = titleNode ? extractText(titleNode).trim() : "別表";
+  const lines: string[] = [];
+  renderAppdxTable(node, lines);
+  const text = lines.join("\n").trim();
+  const references = detectReferences(text);
+  return {
+    article_num: `appdx_${node.attr?.["Num"] ?? ""}`,
+    article_caption: "",
+    article_title: title,
+    text,
+    ...(references.length > 0 ? { references } : {}),
+  };
+}
+
+/**
+ * Convert a SupplProvision node to a StructuredArticle (pseudo).
+ */
+function supplProvisionToStructured(node: LawNode): StructuredArticle {
+  const labelNode = findChildByTag(node, "SupplProvisionLabel");
+  const label = labelNode ? extractText(labelNode).trim() : "附則";
+  const lines: string[] = [];
+  renderSupplProvision(node, lines);
+  const text = lines.join("\n").trim();
+  const references = detectReferences(text);
+  return {
+    article_num: "suppl",
+    article_caption: "",
+    article_title: label,
+    paragraphs: [
+      {
+        paragraph_num: "1",
+        paragraph_sentence: text,
+        items: [],
+      },
+    ],
+    ...(references.length > 0 ? { references } : {}),
+  };
+}
+
+/**
+ * Convert an AppdxTable node to a StructuredArticle (pseudo).
+ */
+function appdxTableToStructured(node: LawNode): StructuredArticle {
+  const titleNode = findChildByTag(node, "AppdxTableTitle");
+  const title = titleNode ? extractText(titleNode).trim() : "別表";
+  const lines: string[] = [];
+  renderAppdxTable(node, lines);
+  const text = lines.join("\n").trim();
+  const references = detectReferences(text);
+  return {
+    article_num: `appdx_${node.attr?.["Num"] ?? ""}`,
+    article_caption: "",
+    article_title: title,
+    paragraphs: [
+      {
+        paragraph_num: "1",
+        paragraph_sentence: text,
+        items: [],
+      },
+    ],
+    ...(references.length > 0 ? { references } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Special section dispatch (附則 / 別表)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a special section request to a ParsedArticle.
+ */
+function resolveSpecialSectionParsed(
+  root: LawNode,
+  request: SpecialSectionRequest,
+): ParsedArticle | null {
+  switch (request.type) {
+    case "suppl_all": {
+      const node = findOriginalSupplProvision(root);
+      return node ? supplProvisionToParsed(node) : null;
+    }
+    case "suppl_article": {
+      const supplNode = findOriginalSupplProvision(root);
+      if (!supplNode) return null;
+      const article = findArticleNode(supplNode, request.articleNumber);
+      return article ? articleNodeToParsed(article) : null;
+    }
+    case "suppl_amendment": {
+      const node = findAmendmentSupplProvision(root, request.amendLawNum);
+      return node ? supplProvisionToParsed(node) : null;
+    }
+    case "suppl_amendment_article": {
+      const supplNode = findAmendmentSupplProvision(root, request.amendLawNum);
+      if (!supplNode) return null;
+      const article = findArticleNode(supplNode, request.articleNumber);
+      return article ? articleNodeToParsed(article) : null;
+    }
+    case "appdx_table": {
+      const node = findAppdxTableNode(root, request.tableNum);
+      return node ? appdxTableToParsed(node) : null;
+    }
+  }
+}
+
+/**
+ * Resolve a special section request to a StructuredArticle.
+ */
+function resolveSpecialSectionStructured(
+  root: LawNode,
+  request: SpecialSectionRequest,
+): StructuredArticle | null {
+  switch (request.type) {
+    case "suppl_all": {
+      const node = findOriginalSupplProvision(root);
+      return node ? supplProvisionToStructured(node) : null;
+    }
+    case "suppl_article": {
+      const supplNode = findOriginalSupplProvision(root);
+      if (!supplNode) return null;
+      const article = findArticleNode(supplNode, request.articleNumber);
+      return article ? articleNodeToStructured(article) : null;
+    }
+    case "suppl_amendment": {
+      const node = findAmendmentSupplProvision(root, request.amendLawNum);
+      return node ? supplProvisionToStructured(node) : null;
+    }
+    case "suppl_amendment_article": {
+      const supplNode = findAmendmentSupplProvision(root, request.amendLawNum);
+      if (!supplNode) return null;
+      const article = findArticleNode(supplNode, request.articleNumber);
+      return article ? articleNodeToStructured(article) : null;
+    }
+    case "appdx_table": {
+      const node = findAppdxTableNode(root, request.tableNum);
+      return node ? appdxTableToStructured(node) : null;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Structured article building
 // ---------------------------------------------------------------------------
 
@@ -684,7 +1087,9 @@ function articleNodeToStructured(article: LawNode): StructuredArticle {
  * Extract a specific article from the law tree as plain text.
  *
  * `articleNumber` can be in any of these formats:
- *   "20", "第20条", "20条", "6条の2", "第6条の2", "第百条"
+ *   "20", "第20条", "20条", "6条の2", "第6条の2", "第百条",
+ *   "附則", "附則第3条", "附則（令和4年法律第69号）",
+ *   "別表第一", "別表第1", "別表1"
  *
  * Returns null if the article is not found.
  */
@@ -692,6 +1097,12 @@ export function parseArticle(
   root: LawNode,
   articleNumber: string,
 ): ParsedArticle | null {
+  // Check for special section patterns (附則, 別表)
+  const special = detectSpecialSection(articleNumber);
+  if (special) {
+    return resolveSpecialSectionParsed(root, special);
+  }
+
   const node = findArticleNode(root, articleNumber);
   return node ? articleNodeToParsed(node) : null;
 }
@@ -701,11 +1112,20 @@ export function parseArticle(
  *
  * Same input formats as `parseArticle`. Returns hierarchical structure:
  * Article -> Paragraph -> Item -> Subitem.
+ *
+ * For 附則 (whole) and 別表, returns a pseudo StructuredArticle with
+ * the rendered text in a single paragraph.
  */
 export function parseArticleStructured(
   root: LawNode,
   articleNumber: string,
 ): StructuredArticle | null {
+  // Check for special section patterns (附則, 別表)
+  const special = detectSpecialSection(articleNumber);
+  if (special) {
+    return resolveSpecialSectionStructured(root, special);
+  }
+
   const node = findArticleNode(root, articleNumber);
   return node ? articleNodeToStructured(node) : null;
 }
