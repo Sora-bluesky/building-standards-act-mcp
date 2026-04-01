@@ -16,8 +16,7 @@
     "dev": "tsx src/index.ts",
     "lint": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "tasks:sync": "node .claude/hooks/roadmap-sync.js sync"
+    "test:watch": "vitest"
   },
   "keywords": [
     "mcp",
