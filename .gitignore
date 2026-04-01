@@ -48,3 +48,6 @@ scripts/
 
 # === npm pack artifacts ===
 package/
+
+# === Reference materials (internal) ===
+.references/

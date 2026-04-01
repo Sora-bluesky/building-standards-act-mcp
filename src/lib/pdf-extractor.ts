@@ -27,6 +27,31 @@ if (typeof globalThis.DOMMatrix === "undefined") {
 
 const PDF_TEXT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const REQUEST_TIMEOUT = 30_000; // 30 seconds
+
+/**
+ * Allowed hosts for PDF downloads (SSRF prevention).
+ * Only government domains that host building-standards-related PDFs.
+ */
+export const ALLOWED_PDF_HOSTS = ["www.mlit.go.jp"];
+
+/**
+ * Validate that a PDF URL points to an allowed government domain.
+ * Rejects non-HTTP(S) schemes and non-whitelisted hosts.
+ */
+export function isAllowedPdfUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return false;
+    }
+    return ALLOWED_PDF_HOSTS.some(
+      (host) =>
+        parsed.hostname === host || parsed.hostname.endsWith("." + host),
+    );
+  } catch {
+    return false;
+  }
+}
 const PDF_USER_AGENT =
   "BuildingStandardsActMCP/1.1 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
 
@@ -87,6 +112,12 @@ function normalizeText(raw: string): string {
  * @throws Error if the PDF cannot be fetched or parsed
  */
 export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
+  if (!isAllowedPdfUrl(pdfUrl)) {
+    throw new Error(
+      "許可されていないURLです: PDFは指定された政府サイトからのみ取得できます",
+    );
+  }
+
   const cacheKey = `pdf:${pdfUrl}`;
   const cached = pdfTextCache.get(cacheKey);
   if (cached) {

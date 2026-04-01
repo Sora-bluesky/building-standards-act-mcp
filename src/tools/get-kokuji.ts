@@ -12,6 +12,7 @@ const registry = new KokujiRegistry();
 const schema = {
   kokuji_name: z
     .string()
+    .max(200)
     .describe("告示名（例: 耐火構造の構造方法を定める件、不燃材料を定める件）"),
 };
 

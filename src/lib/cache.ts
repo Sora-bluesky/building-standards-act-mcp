@@ -26,9 +26,14 @@ interface CacheEntry<T> {
 export class TTLCache<T> implements ICache<T> {
   private readonly store = new Map<string, CacheEntry<T>>();
   private readonly default_ttl_ms: number;
+  private readonly maxEntries: number;
 
-  constructor(default_ttl_ms: number = 30 * 60 * 1000) {
+  constructor(
+    default_ttl_ms: number = 30 * 60 * 1000,
+    maxEntries: number = 500,
+  ) {
     this.default_ttl_ms = default_ttl_ms;
+    this.maxEntries = maxEntries;
   }
 
   get(key: string): T | undefined {
@@ -45,6 +50,13 @@ export class TTLCache<T> implements ICache<T> {
 
   set(key: string, value: T, ttl_ms?: number): void {
     const ttl = ttl_ms ?? this.default_ttl_ms;
+    // Evict oldest entry if at capacity (skip if key already exists)
+    if (!this.store.has(key) && this.store.size >= this.maxEntries) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.store.delete(oldestKey);
+      }
+    }
     this.store.set(key, {
       value,
       expires_at: Date.now() + ttl,
@@ -88,9 +100,15 @@ const DEFAULT_CACHE_DIR = path.join(
 export class FileCache<T> implements ICache<T> {
   private readonly dir: string;
   private readonly default_ttl_ms: number;
+  private readonly maxEntries: number;
 
-  constructor(name: string, default_ttl_ms: number = 30 * 60 * 1000) {
+  constructor(
+    name: string,
+    default_ttl_ms: number = 30 * 60 * 1000,
+    maxEntries: number = 200,
+  ) {
     this.default_ttl_ms = default_ttl_ms;
+    this.maxEntries = maxEntries;
     const cacheBase = process.env.BUILDING_LAW_CACHE_DIR ?? DEFAULT_CACHE_DIR;
     this.dir = path.join(cacheBase, name);
     fs.mkdirSync(this.dir, { recursive: true });
@@ -123,7 +141,41 @@ export class FileCache<T> implements ICache<T> {
   set(key: string, value: T, ttl_ms?: number): void {
     const ttl = ttl_ms ?? this.default_ttl_ms;
     const entry: CacheEntry<T> = { value, expires_at: Date.now() + ttl };
-    fs.writeFileSync(this.keyToPath(key), JSON.stringify(entry), "utf-8");
+    const filePath = this.keyToPath(key);
+    // Evict oldest file if at capacity (skip if key already exists)
+    if (!fs.existsSync(filePath) && this.size >= this.maxEntries) {
+      this.evictOldest();
+    }
+    fs.writeFileSync(filePath, JSON.stringify(entry), "utf-8");
+  }
+
+  private evictOldest(): void {
+    try {
+      const files = fs.readdirSync(this.dir).filter((f) => f.endsWith(".json"));
+      let oldestFile: string | undefined;
+      let oldestMtime = Infinity;
+      for (const file of files) {
+        const filePath = path.join(this.dir, file);
+        try {
+          const stat = fs.statSync(filePath);
+          if (stat.mtimeMs < oldestMtime) {
+            oldestMtime = stat.mtimeMs;
+            oldestFile = filePath;
+          }
+        } catch {
+          // skip inaccessible files
+        }
+      }
+      if (oldestFile) {
+        try {
+          fs.unlinkSync(oldestFile);
+        } catch {
+          // ignore cleanup failure
+        }
+      }
+    } catch {
+      // directory might not exist
+    }
   }
 
   has(key: string): boolean {
@@ -192,10 +244,14 @@ export class FileCache<T> implements ICache<T> {
  * - `"memory"` (default): in-memory TTLCache
  * - `"file"`: file-based FileCache that persists across restarts
  */
-export function createCache<T>(name: string, ttl_ms: number): ICache<T> {
+export function createCache<T>(
+  name: string,
+  ttl_ms: number,
+  maxEntries?: number,
+): ICache<T> {
   const mode = process.env.BUILDING_LAW_CACHE ?? "memory";
   if (mode === "file") {
-    return new FileCache<T>(name, ttl_ms);
+    return new FileCache<T>(name, ttl_ms, maxEntries ?? 200);
   }
-  return new TTLCache<T>(ttl_ms);
+  return new TTLCache<T>(ttl_ms, maxEntries ?? 500);
 }
