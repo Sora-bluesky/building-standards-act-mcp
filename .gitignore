@@ -45,3 +45,6 @@ tasks/
 
 # === Dev-only scripts (not needed by end users) ===
 scripts/
+
+# === npm pack artifacts ===
+package/
