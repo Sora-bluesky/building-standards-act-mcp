@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-01
+
+### Added
+
+- **入力バリデーション強化** (OWASP MCP05): 全9ツールの Zod スキーマに `.max()` 制約を追加。法令名200文字、条文番号100文字、キーワード500文字等
+- **PDF URL ホワイトリスト** (OWASP MCP08 SSRF対策): `extractTextFromPdf()` が許可された政府ドメイン (`www.mlit.go.jp`) からのみ PDF を取得するよう制限
+- **キャッシュサイズ制限**: `TTLCache` (最大500件) と `FileCache` (最大200件) に FIFO eviction を追加。メモリ枯渇 DoS を防止
+- **npm audit CI統合** (OWASP MCP04): `cross-platform-test.yml` に `npm audit --audit-level=high` ステップを追加
+
+### Changed
+
+- README から ChatGPT カスタム GPT セットアップ手順と Gemini CLI セットアップ手順を削除
+- `package.json` から内部開発用 `tasks:sync` スクリプトを削除
+- `.gitignore` に `package/` (npm pack 成果物) と `.references/` (内部参考資料) を追加
+
 ## [1.3.1] - 2026-03-20
 
 ### Fixed
