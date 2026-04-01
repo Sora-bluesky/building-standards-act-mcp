@@ -7,8 +7,9 @@ import type { RelatedLawSuggestion } from "../lib/types.js";
 const schema = {
   law_name: z
     .string()
+    .max(200)
     .describe("法令名（正式名称または略称。例: 建築基準法、建基法）"),
-  article_number: z.string().describe("条文番号（例: 第20条、20）"),
+  article_number: z.string().max(100).describe("条文番号（例: 第20条、20）"),
 };
 
 function formatSuggestion(result: RelatedLawSuggestion): string {

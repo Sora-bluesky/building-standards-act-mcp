@@ -10,14 +10,19 @@ const schema = {
   citations: z
     .array(
       z.object({
-        law_name: z.string().describe("法令名（正式名称または略称）"),
-        article_number: z.string().describe("条文番号（例: 第20条、20）"),
+        law_name: z.string().max(200).describe("法令名（正式名称または略称）"),
+        article_number: z
+          .string()
+          .max(100)
+          .describe("条文番号（例: 第20条、20）"),
         claimed_text: z
           .string()
+          .max(2000)
           .optional()
           .describe("AIが主張する条文テキスト。省略時は条文の存在確認のみ。"),
       }),
     )
+    .max(10)
     .describe("検証対象の引用リスト（最大10件）"),
 };
 

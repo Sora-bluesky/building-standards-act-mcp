@@ -154,6 +154,39 @@ describe("TTLCache", () => {
       expect(cache.size).toBe(0);
     });
   });
+
+  describe("maxEntries eviction", () => {
+    it("evicts oldest entry when at capacity", () => {
+      const cache = new TTLCache<string>(60_000, 2);
+      cache.set("first", "1");
+      cache.set("second", "2");
+      cache.set("third", "3");
+
+      expect(cache.get("first")).toBeUndefined();
+      expect(cache.get("second")).toBe("2");
+      expect(cache.get("third")).toBe("3");
+    });
+
+    it("does not evict when updating an existing key", () => {
+      const cache = new TTLCache<string>(60_000, 2);
+      cache.set("a", "1");
+      cache.set("b", "2");
+      cache.set("a", "updated");
+
+      expect(cache.get("a")).toBe("updated");
+      expect(cache.get("b")).toBe("2");
+    });
+
+    it("uses default maxEntries of 500", () => {
+      const cache = new TTLCache<number>();
+      for (let i = 0; i < 500; i++) {
+        cache.set(`key-${i}`, i);
+      }
+      expect(cache.get("key-0")).toBe(0);
+      cache.set("key-500", 500);
+      expect(cache.get("key-0")).toBeUndefined();
+    });
+  });
 });
 
 describe("FileCache", () => {
@@ -304,6 +337,29 @@ describe("FileCache", () => {
       vi.advanceTimersByTime(501);
       expect(cache.size).toBe(1);
       vi.useRealTimers();
+    });
+  });
+
+  describe("maxEntries eviction", () => {
+    it("evicts oldest file when at capacity", () => {
+      const cache = new FileCache<string>("evict-test", 60_000, 2);
+      cache.set("first", "1");
+      cache.set("second", "2");
+      cache.set("third", "3");
+
+      expect(cache.get("first")).toBeUndefined();
+      expect(cache.get("second")).toBe("2");
+      expect(cache.get("third")).toBe("3");
+    });
+
+    it("does not evict when updating an existing key", () => {
+      const cache = new FileCache<string>("evict-update-test", 60_000, 2);
+      cache.set("a", "1");
+      cache.set("b", "2");
+      cache.set("a", "updated");
+
+      expect(cache.get("a")).toBe("updated");
+      expect(cache.get("b")).toBe("2");
     });
   });
 

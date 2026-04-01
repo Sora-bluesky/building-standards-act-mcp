@@ -8,6 +8,7 @@ const registry = new LawRegistry();
 const schema = {
   keyword: z
     .string()
+    .max(500)
     .describe("検索キーワード（例: 耐火構造、避難階段、建築確認）"),
 };
 

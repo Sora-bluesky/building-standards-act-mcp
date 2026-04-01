@@ -16,14 +16,18 @@ const schema = {
   requests: z
     .array(
       z.object({
-        law_name: z.string().describe("法令名（正式名称または略称）"),
-        article_number: z.string().describe("条文番号（例: 第20条、20）"),
+        law_name: z.string().max(200).describe("法令名（正式名称または略称）"),
+        article_number: z
+          .string()
+          .max(100)
+          .describe("条文番号（例: 第20条、20）"),
         format: z
           .enum(["text", "structured"])
           .default("text")
           .describe("出力形式"),
       }),
     )
+    .max(20)
     .describe("取得対象の条文リスト（最大20件）"),
 };
 

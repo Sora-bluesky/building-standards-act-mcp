@@ -8,6 +8,7 @@ import { LawNotFoundError } from "../lib/errors.js";
 const schema = {
   law_name: z
     .string()
+    .max(200)
     .describe(
       "法令名（正式名称、略称のいずれか。例: 建築基準法施行令、建基令）",
     ),

@@ -14,12 +14,14 @@ const registry = new LawRegistry();
 const schema = {
   law_name: z
     .string()
+    .max(200)
     .optional()
     .describe(
       "法令名または略称（例: 建築基準法、建基法）。単体チェックに使用。",
     ),
   group: z
     .string()
+    .max(100)
     .optional()
     .describe(
       "検証対象の章グループ（例: 1章）。省略時は全プリセットをチェック。",
