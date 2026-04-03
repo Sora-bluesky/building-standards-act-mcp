@@ -816,12 +816,8 @@ describe("Integration: MCP Server Tools", () => {
   // ── get_kokuji ──────────────────────────────────
 
   describe("get_kokuji", () => {
-    it("returns preset kokuji failure message when MLIT pipeline fails", async () => {
-      // "耐火構造の構造方法を定める件" matches a preset.
-      // The flow tries MLIT first (fetch notice page → Excel → PDF).
-      // With our mock returning 404 for MLIT URLs, the pipeline fails.
-      // The preset has law_id="" so e-Gov fallback is also skipped.
-      // Result: "告示本文の取得に失敗しました"
+    it("returns guidance when MLIT and e-Gov both fail", async () => {
+      // No presets — flow: MLIT search (fails) → e-Gov search (fails) → guidance
       mockFetch.mockImplementation(async (url: string) => {
         if (typeof url !== "string") {
           throw new Error(`Unexpected fetch input: ${url}`);
@@ -830,6 +826,13 @@ describe("Integration: MCP Server Tools", () => {
         // MLIT URLs return 404 so the pipeline fails gracefully
         if (url.includes("mlit.go.jp")) {
           return createMockResponse("Not Found", 404, "Not Found");
+        }
+
+        // e-Gov search returns empty
+        if (url.includes("laws.e-gov.go.jp/api/2/laws")) {
+          return createMockResponse(
+            JSON.stringify({ total_count: 0, count: 0, laws: [] }),
+          );
         }
 
         throw new Error(`Unexpected fetch URL: ${url}`);
@@ -844,8 +847,8 @@ describe("Integration: MCP Server Tools", () => {
 
       expect(result.isError).toBeFalsy();
       const text = getText(result);
-      expect(text).toContain("【告示】耐火構造の構造方法を定める件");
-      expect(text).toContain("告示本文の取得に失敗しました");
+      expect(text).toContain("該当する告示を確認できませんでした");
+      expect(text).toContain("get_law");
     });
 
     it("returns e-Gov search result for non-preset kokuji", async () => {

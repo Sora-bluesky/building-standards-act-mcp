@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
-import { findKokujiPdfUrl } from "../lib/mlit-client.js";
+import { findKokujiPdfUrl, searchMlitNotices } from "../lib/mlit-client.js";
 import { extractTextFromPdf } from "../lib/pdf-extractor.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
@@ -220,17 +220,36 @@ export function registerGetKokujiTool(server: McpServer): void {
         return { content: [{ type: "text" as const, text }] };
       }
 
-      // Nothing found anywhere
-      const allKokuji = registry.getAll();
+      // Nothing found anywhere — suggest similar entries from MLIT database
+      const mainKeyword = kokuji_name
+        .replace(/[のをにはでがとへもからまで等及び又は並びに]/g, "")
+        .replace(/[、。（）()「」]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length >= 3)
+        .slice(0, 1)[0];
+
+      const suggestions = mainKeyword
+        ? await searchMlitNotices(mainKeyword)
+        : [];
+      const suggestionLines =
+        suggestions.length > 0
+          ? [
+              "",
+              `「${mainKeyword}」を含む告示:`,
+              ...suggestions.slice(0, 5).map((s) => `  - ${s.title}`),
+              "",
+              "正式名称で再度お試しください。",
+            ]
+          : [];
+
       const text = [
         `該当する告示を確認できませんでした: ${kokuji_name}`,
         "",
-        "告示は e-Gov 法令 API v2 の検索対象に含まれていない場合があります。",
-        "正式な告示名で再度お試しいただくか、関連する法令（建築基準法施行令等）の",
+        "国土交通省の告示データベースおよび e-Gov 法令検索のいずれにも",
+        "一致する告示が見つかりませんでした。",
+        "正式な告示名で再度お試しいただくか、関連する法令の",
         "該当条文を get_law ツールで確認してください。",
-        "",
-        "登録済みの告示一覧:",
-        ...allKokuji.map((k) => `  - ${k.title}`),
+        ...suggestionLines,
       ].join("\n");
 
       return { content: [{ type: "text" as const, text }] };

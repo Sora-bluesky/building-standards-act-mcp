@@ -342,26 +342,77 @@ async function getAllEntries(): Promise<MlitNoticeEntry[]> {
 }
 
 /**
+ * Extract meaningful keywords from a kokuji title for fuzzy matching.
+ * Extracts runs of kanji (3+ chars), then splits long runs into
+ * overlapping 3-character chunks to handle word boundary differences
+ * (e.g. "許容応力度計算等" → ["許容応", "応力度", "力度計", "度計算"]).
+ */
+function extractKeywords(title: string): string[] {
+  const kanjiRuns = title.match(/[\u4E00-\u9FFF]{3,}/g) ?? [];
+
+  const chunks: string[] = [];
+  for (const run of kanjiRuns) {
+    if (run.length <= 4) {
+      chunks.push(run);
+    } else {
+      // Sliding window of 3 characters
+      for (let i = 0; i <= run.length - 3; i++) {
+        chunks.push(run.substring(i, i + 3));
+      }
+    }
+  }
+
+  return [...new Set(chunks)];
+}
+
+/**
  * Search for a kokuji (ministerial notification) in the MLIT notice database
- * and return its PDF URL. Uses partial title matching.
+ * and return its PDF URL. Uses three-stage matching:
+ * 1. Exact match
+ * 2. Partial match (includes)
+ * 3. Keyword match (all extracted keywords must appear in the entry title)
  *
- * @param title - The kokuji title to search for (partial match supported)
+ * @param title - The kokuji title to search for
  * @returns The PDF URL if found, null otherwise
  */
 export async function findKokujiPdfUrl(title: string): Promise<string | null> {
   const entries = await getAllEntries();
 
-  // Try exact match first
+  // Stage 1: exact match
   const exact = entries.find((e) => e.title === title);
   if (exact) {
     return exact.pdf_url;
   }
 
-  // Fall back to partial match (title includes search term or vice versa)
+  // Stage 2: partial match (title includes search term or vice versa)
   const partial = entries.find(
     (e) => e.title.includes(title) || title.includes(e.title),
   );
-  return partial?.pdf_url ?? null;
+  if (partial) {
+    return partial.pdf_url;
+  }
+
+  // Stage 3: keyword match — find entry with highest keyword overlap
+  const keywords = extractKeywords(title);
+  if (keywords.length >= 2) {
+    const threshold = Math.ceil(keywords.length * 0.5); // at least 50% match
+    let bestMatch: MlitNoticeEntry | null = null;
+    let bestScore = 0;
+
+    for (const entry of entries) {
+      const score = keywords.filter((kw) => entry.title.includes(kw)).length;
+      if (score >= threshold && score > bestScore) {
+        bestScore = score;
+        bestMatch = entry;
+      }
+    }
+
+    if (bestMatch) {
+      return bestMatch.pdf_url;
+    }
+  }
+
+  return null;
 }
 
 /**

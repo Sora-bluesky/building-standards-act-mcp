@@ -11,6 +11,7 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
 }));
 vi.mock("../../src/lib/mlit-client.js", () => ({
   findKokujiPdfUrl: vi.fn(),
+  searchMlitNotices: vi.fn(),
 }));
 vi.mock("../../src/lib/pdf-extractor.js", () => ({
   extractTextFromPdf: vi.fn(),
@@ -19,7 +20,10 @@ vi.mock("../../src/lib/pdf-extractor.js", () => ({
 import { registerGetKokujiTool } from "../../src/tools/get-kokuji.js";
 import { searchLaws, getLawData } from "../../src/lib/egov-client.js";
 import { parseFullLaw } from "../../src/lib/egov-parser.js";
-import { findKokujiPdfUrl } from "../../src/lib/mlit-client.js";
+import {
+  findKokujiPdfUrl,
+  searchMlitNotices,
+} from "../../src/lib/mlit-client.js";
 import { extractTextFromPdf } from "../../src/lib/pdf-extractor.js";
 
 // Capture the handler registered by the tool
@@ -46,7 +50,7 @@ describe("get_kokuji tool", () => {
     );
   });
 
-  it("returns preset kokuji text via MLIT pipeline", async () => {
+  it("returns kokuji text via MLIT dynamic search", async () => {
     const mockPdfUrl = "https://www.mlit.go.jp/notice/test.pdf";
     const mockPdfText = "耐火構造の構造方法は、次に定めるものとする。";
 
@@ -59,51 +63,14 @@ describe("get_kokuji tool", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].type).toBe("text");
-    expect(result.content[0].text).toContain("【告示】");
+    // No presets — goes through dynamic MLIT search (Step 3)
+    expect(result.content[0].text).toContain("【検索結果】");
     expect(result.content[0].text).toContain("耐火構造の構造方法を定める件");
-    expect(result.content[0].text).toContain(
-      "平成十二年建設省告示第千三百九十九号",
-    );
-    expect(result.content[0].text).toContain("建築基準法施行令");
     expect(result.content[0].text).toContain(mockPdfText);
     expect(result.content[0].text).toContain("出典: 国土交通省");
   });
 
-  it("falls back when MLIT fails and shows failure message", async () => {
-    // MLIT pipeline fails
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(null);
-
-    const result = await handler({
-      kokuji_name: "耐火構造の構造方法を定める件",
-    });
-
-    // Preset has law_id="" so e-Gov fallback is skipped
-    // Result should show "取得に失敗しました"
-    expect(result.isError).toBeUndefined();
-    expect(result.content[0].type).toBe("text");
-    expect(result.content[0].text).toContain("告示本文の取得に失敗しました");
-    expect(result.content[0].text).toContain("耐火構造の構造方法を定める件");
-  });
-
-  it("returns search result text when no preset matches but MLIT finds it", async () => {
-    const mockPdfUrl = "https://www.mlit.go.jp/notice/other.pdf";
-    const mockPdfText = "この告示は検索で見つかりました。";
-
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(mockPdfUrl);
-    vi.mocked(extractTextFromPdf).mockResolvedValue(mockPdfText);
-
-    const result = await handler({
-      kokuji_name: "存在しないが検索で見つかる告示",
-    });
-
-    expect(result.isError).toBeUndefined();
-    expect(result.content[0].type).toBe("text");
-    expect(result.content[0].text).toContain("【検索結果】");
-    expect(result.content[0].text).toContain(mockPdfText);
-    expect(result.content[0].text).toContain("プリセットに含まれていない");
-  });
-
-  it("returns e-Gov fallback when no preset and MLIT fails", async () => {
+  it("falls back to e-Gov when MLIT fails", async () => {
     // MLIT pipeline fails
     vi.mocked(findKokujiPdfUrl).mockResolvedValue(null);
 
@@ -173,7 +140,7 @@ describe("get_kokuji tool", () => {
     vi.mocked(parseFullLaw).mockReturnValue(mockFullText);
 
     const result = await handler({
-      kokuji_name: "存在しないが検索で見つかる告示",
+      kokuji_name: "耐火構造の構造方法を定める件",
     });
 
     expect(result.isError).toBeUndefined();
@@ -181,6 +148,23 @@ describe("get_kokuji tool", () => {
     expect(result.content[0].text).toContain("【検索結果】");
     expect(result.content[0].text).toContain("e-Gov法令検索");
     expect(result.content[0].text).toContain(mockFullText);
+  });
+
+  it("returns search result text when MLIT finds non-preset kokuji", async () => {
+    const mockPdfUrl = "https://www.mlit.go.jp/notice/other.pdf";
+    const mockPdfText = "この告示は検索で見つかりました。";
+
+    vi.mocked(findKokujiPdfUrl).mockResolvedValue(mockPdfUrl);
+    vi.mocked(extractTextFromPdf).mockResolvedValue(mockPdfText);
+
+    const result = await handler({
+      kokuji_name: "存在しないが検索で見つかる告示",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].type).toBe("text");
+    expect(result.content[0].text).toContain("【検索結果】");
+    expect(result.content[0].text).toContain(mockPdfText);
   });
 
   it("returns guidance when nothing found anywhere", async () => {
@@ -195,6 +179,9 @@ describe("get_kokuji tool", () => {
     };
     vi.mocked(searchLaws).mockResolvedValue(emptySearchResult as any);
 
+    // MLIT suggestion search returns empty
+    vi.mocked(searchMlitNotices).mockResolvedValue([]);
+
     const result = await handler({
       kokuji_name: "存在しない告示",
     });
@@ -205,29 +192,12 @@ describe("get_kokuji tool", () => {
       "該当する告示を確認できませんでした",
     );
     expect(result.content[0].text).toContain("存在しない告示");
-    // Should list the 7 presets
-    expect(result.content[0].text).toContain("登録済みの告示一覧");
-    expect(result.content[0].text).toContain("耐火構造の構造方法を定める件");
     expect(result.content[0].text).toContain("get_law");
     // getLawData should NOT have been called since nothing was found
     expect(getLawData).not.toHaveBeenCalled();
   });
 
   it("returns error on unexpected exception", async () => {
-    // Make findKokujiPdfUrl throw an uncaught error
-    // The preset is found first, then fetchViaMlit is called which calls findKokujiPdfUrl
-    // But findKokujiPdfUrl is called inside fetchViaMlit which has no try-catch around it
-    // Actually, looking at the code: fetchViaMlit does NOT have a try-catch around findKokujiPdfUrl
-    // but the outer try-catch in the handler will catch it.
-    // However, for a non-preset name, the flow is:
-    // 1. no preset -> fetchViaMlit(kokuji_name) which calls findKokujiPdfUrl
-    //    If findKokujiPdfUrl throws, it propagates up to fetchViaMlit, which doesn't catch it,
-    //    but the outer try-catch in the handler catches it.
-    // Wait, let me re-read: fetchViaMlit does NOT have try-catch around findKokujiPdfUrl call.
-    // So a throw from findKokujiPdfUrl will propagate to the handler's outer try-catch.
-
-    // For a preset name, the flow goes to fetchViaMlit first.
-    // The throw from findKokujiPdfUrl propagates up through fetchViaMlit to the handler's try-catch.
     vi.mocked(findKokujiPdfUrl).mockRejectedValue(
       new Error("Unexpected network error"),
     );
