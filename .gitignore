@@ -31,9 +31,8 @@ Thumbs.db
 .vscode/
 .mcp.json
 
-# === Claude Code / tobari ===
+# === Claude Code / tobari (internal) ===
 .claude/
-CLAUDE.md
 HANDOFF.md
 
 # === Python ===
