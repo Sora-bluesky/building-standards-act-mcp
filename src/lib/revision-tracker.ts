@@ -29,7 +29,10 @@ export async function checkLawUpdate(
     const latest = revisions[0];
 
     // Check for repeal
-    if (latest.repeal_status !== "" && latest.repeal_status !== "none") {
+    if (
+      latest.repeal_status !== "" &&
+      latest.repeal_status.toLowerCase() !== "none"
+    ) {
       return {
         title: resolved.title,
         law_id: resolved.law_id,
@@ -95,7 +98,9 @@ export async function getLawRevisionHistory(
     const latest = response.revisions[0];
     const amendmentDate = latest?.amendment_promulgate_date ?? "";
     const isRepealed =
-      latest && latest.repeal_status !== "" && latest.repeal_status !== "none";
+      latest &&
+      latest.repeal_status !== "" &&
+      latest.repeal_status.toLowerCase() !== "none";
     const hasRevisions = !isRepealed && amendmentDate !== "";
 
     return {
