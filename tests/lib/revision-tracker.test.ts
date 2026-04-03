@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawRevisions: vi.fn(),
+  hasRevisionsCached: vi.fn().mockReturnValue(false),
 }));
 
 import {
   checkLawUpdate,
   checkLawUpdates,
   getLawRevisionHistory,
+  mapWithConcurrency,
 } from "../../src/lib/revision-tracker.js";
 import { getLawRevisions } from "../../src/lib/egov-client.js";
 import type { ResolvedLaw, EgovRevisionInfo } from "../../src/lib/types.js";
@@ -180,6 +182,39 @@ describe("revision-tracker", () => {
       expect(results[0].title).toBe("法A");
       expect(results[1].title).toBe("法B");
       expect(getLawRevisions).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("mapWithConcurrency", () => {
+    it("preserves result ordering", async () => {
+      const items = [10, 20, 30];
+      const results = await mapWithConcurrency(items, async (n) => n * 2, 2);
+      expect(results).toEqual([20, 40, 60]);
+    });
+
+    it("respects concurrency limit", async () => {
+      let running = 0;
+      let maxRunning = 0;
+
+      const items = Array.from({ length: 10 }, (_, i) => i);
+      await mapWithConcurrency(
+        items,
+        async (n) => {
+          running++;
+          maxRunning = Math.max(maxRunning, running);
+          await new Promise((r) => setTimeout(r, 10));
+          running--;
+          return n;
+        },
+        3,
+      );
+
+      expect(maxRunning).toBeLessThanOrEqual(3);
+    });
+
+    it("works with empty array", async () => {
+      const results = await mapWithConcurrency([], async (n: number) => n, 5);
+      expect(results).toEqual([]);
     });
   });
 

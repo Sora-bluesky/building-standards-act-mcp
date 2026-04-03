@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-04-03
+
+### Added
+
+- **check_law_updates 並行実行**: 法令改正チェックを最大5並行で実行（`mapWithConcurrency`）。53法令の9章グループが逐次26秒→並行9秒に短縮
+- **キャッシュヒット時の sleep スキップ**: キャッシュ済み法令はレート制限遅延をスキップ。ウォームキャッシュ時はほぼ即時応答
+- **環境変数**: `BUILDING_LAW_RATE_LIMIT_MS`（デフォルト200ms）、`BUILDING_LAW_CONCURRENCY`（デフォルト5）で調整可能
+
+### Changed
+
+- API 呼び出し間隔を 500ms → 200ms に短縮（並行実行との組み合わせで十分なレート制限を維持）
+- Vercel `maxDuration` を 30秒 → 60秒に引き上げ
+
 ## [1.4.1] - 2026-04-03
 
 ### Fixed

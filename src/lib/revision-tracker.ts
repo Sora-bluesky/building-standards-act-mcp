@@ -1,10 +1,38 @@
-import { getLawRevisions } from "./egov-client.js";
+import { getLawRevisions, hasRevisionsCached } from "./egov-client.js";
 import type { ResolvedLaw, LawUpdateCheckResult } from "./types.js";
 
-const RATE_LIMIT_DELAY_MS = 500;
+const DEFAULT_RATE_LIMIT_MS = 200;
+export const RATE_LIMIT_DELAY_MS =
+  Number(process.env.BUILDING_LAW_RATE_LIMIT_MS) || DEFAULT_RATE_LIMIT_MS;
+const DEFAULT_CONCURRENCY = 5;
+export const CONCURRENCY =
+  Number(process.env.BUILDING_LAW_CONCURRENCY) || DEFAULT_CONCURRENCY;
 
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run an async mapper over items with bounded concurrency.
+ * Preserves input order in the returned results array.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  mapper: (item: T) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  return results;
 }
 
 /**
@@ -66,24 +94,24 @@ export async function checkLawUpdate(
 }
 
 /**
- * Check multiple resolved laws for updates with rate limiting.
+ * Check multiple resolved laws for updates with bounded concurrency.
+ * Rate-limit delay is applied only when the revisions response was NOT cached.
  */
 export async function checkLawUpdates(
   resolvedLaws: ResolvedLaw[],
 ): Promise<LawUpdateCheckResult[]> {
-  const results: LawUpdateCheckResult[] = [];
-
-  for (let i = 0; i < resolvedLaws.length; i++) {
-    const result = await checkLawUpdate(resolvedLaws[i]);
-    results.push(result);
-
-    // Rate limiting: wait between API calls (skip after the last one)
-    if (i < resolvedLaws.length - 1) {
-      await sleep(RATE_LIMIT_DELAY_MS);
-    }
-  }
-
-  return results;
+  return mapWithConcurrency(
+    resolvedLaws,
+    async (resolved) => {
+      const wasCached = hasRevisionsCached(resolved.law_id);
+      const result = await checkLawUpdate(resolved);
+      if (!wasCached) {
+        await sleep(RATE_LIMIT_DELAY_MS);
+      }
+      return result;
+    },
+    CONCURRENCY,
+  );
 }
 
 /**

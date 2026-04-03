@@ -53,7 +53,7 @@ export function isAllowedPdfUrl(url: string): boolean {
   }
 }
 const PDF_USER_AGENT =
-  "BuildingStandardsActMCP/1.4 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
+  "BuildingStandardsActMCP/1.5 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
 
 const pdfTextCache = createCache<string>("pdf-text", PDF_TEXT_CACHE_TTL);
 
