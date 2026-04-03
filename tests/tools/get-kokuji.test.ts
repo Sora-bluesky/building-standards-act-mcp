@@ -238,6 +238,8 @@ describe("get_kokuji tool", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("エラー");
-    expect(result.content[0].text).toContain("Unexpected network error");
+    // Sanitized: internal error details are hidden from client
+    expect(result.content[0].text).not.toContain("Unexpected network error");
+    expect(result.content[0].text).toContain("内部エラー");
   });
 });

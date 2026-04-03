@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { verifyCitation } from "../lib/citation-verifier.js";
 import { formatArticleRef } from "../lib/errors.js";
+import { wrapToolHandler } from "../lib/tool-helpers.js";
 import type { CitationVerification } from "../lib/types.js";
 
 const MAX_CITATIONS = 10;
@@ -81,52 +82,44 @@ export function registerVerifyCitationTool(server: McpServer): void {
     "verify_citation",
     "AIの回答に含まれる法令引用を検証する。条文の存在確認、テキスト照合による正確性チェックが可能。最大10件。",
     schema,
-    async ({ citations }) => {
-      try {
-        if (citations.length === 0) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: "エラー: 検証対象が空です。",
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        if (citations.length > MAX_CITATIONS) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `エラー: 検証対象が上限（${MAX_CITATIONS}件）を超えています（${citations.length}件）。`,
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const results: CitationVerification[] = [];
-
-        for (const citation of citations) {
-          const result = await verifyCitation(
-            citation.law_name,
-            citation.article_number,
-            citation.claimed_text,
-          );
-          results.push(result);
-        }
-
-        const text = formatResults(results);
-        return { content: [{ type: "text" as const, text }] };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+    wrapToolHandler("verify_citation", async ({ citations }) => {
+      if (citations.length === 0) {
         return {
-          content: [{ type: "text" as const, text: `エラー: ${message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: "エラー: 検証対象が空です。",
+            },
+          ],
           isError: true,
         };
       }
-    },
+
+      if (citations.length > MAX_CITATIONS) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `エラー: 検証対象が上限（${MAX_CITATIONS}件）を超えています（${citations.length}件）。`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const results: CitationVerification[] = [];
+
+      for (const citation of citations) {
+        const result = await verifyCitation(
+          citation.law_name,
+          citation.article_number,
+          citation.claimed_text,
+        );
+        results.push(result);
+      }
+
+      const text = formatResults(results);
+      return { content: [{ type: "text" as const, text }] };
+    }),
   );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { analyzeArticle } from "../lib/article-analyzer.js";
+import { wrapToolHandler } from "../lib/tool-helpers.js";
 
 const schema = {
   law_name: z
@@ -15,25 +16,17 @@ export function registerAnalyzeArticleTool(server: McpServer): void {
     "analyze_article",
     "条文の構造を解析し、項数・号数・参照統計・プレビューなどのメタデータをJSON形式で返す。AIが要約・解説を生成する際の素材データとして活用。",
     schema,
-    async ({ law_name, article_number }) => {
-      try {
-        const analysis = await analyzeArticle(law_name, article_number);
+    wrapToolHandler("analyze_article", async ({ law_name, article_number }) => {
+      const analysis = await analyzeArticle(law_name, article_number);
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(analysis, null, 2),
-            },
-          ],
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ type: "text" as const, text: `エラー: ${message}` }],
-          isError: true,
-        };
-      }
-    },
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(analysis, null, 2),
+          },
+        ],
+      };
+    }),
   );
 }
