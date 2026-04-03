@@ -8,7 +8,7 @@ const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
 // User-Agent for MLIT requests — some government sites block requests without it
 const MLIT_USER_AGENT =
-  "BuildingStandardsActMCP/1.4 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
+  "BuildingStandardsActMCP/1.5 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
 
 /** A single entry parsed from the MLIT notice Excel file. */
 export interface MlitNoticeEntry {

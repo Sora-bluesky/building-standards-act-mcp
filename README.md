@@ -44,6 +44,7 @@ Vercel にデプロイすると、Claude.ai からすぐに使えます。環境
 
 - 関数の実行時間が **10 秒** に制限されます（Pro プランでは 60 秒）
 - `get_kokuji`（告示取得）は PDF ダウンロード + パースが重いため、タイムアウトする場合があります
+- `check_law_updates` の大規模グループ（9章: 53法令）は Free tier ではタイムアウトする場合があります（Pro プランでは並行実行により対応可能）
 - `BUILDING_LAW_REQUEST_TIMEOUT=8000` を設定してタイムアウトを短縮できます
 
 ---
@@ -528,6 +529,8 @@ e-Gov API は告示を収録していないため、`get_kokuji` は国土交通
 | `BUILDING_LAW_CACHE_DIR`       | ファイルキャッシュの保存先ディレクトリ            | `~/.cache/building-standards-act-mcp/` |
 | `BUILDING_LAW_LOG_LEVEL`       | ログレベル（`debug` / `info` / `warn` / `error`） | `info`                                 |
 | `BUILDING_LAW_REQUEST_TIMEOUT` | API リクエストタイムアウト（ミリ秒）              | `30000`                                |
+| `BUILDING_LAW_RATE_LIMIT_MS`   | API 呼び出し間隔（ミリ秒）                        | `200`                                  |
+| `BUILDING_LAW_CONCURRENCY`     | 最大並行 API 呼び出し数                           | `5`                                    |
 
 ### 永続キャッシュの有効化
 
@@ -557,7 +560,9 @@ e-Gov API は告示を収録していないため、`get_kokuji` は国土交通
 | 告示 PDF テキストキャッシュ  | 24 時間                          |
 | リビジョン履歴キャッシュ TTL | 1 時間                           |
 | リクエストタイムアウト       | 30 秒（環境変数で変更可能）      |
+| API 並行呼び出し             | 最大 5 並行（200ms 間隔）        |
 | Vercel デプロイ              | 対応（MCP-over-HTTP + REST API） |
+| Vercel 関数タイムアウト      | 60 秒（maxDuration）             |
 | Node.js                      | >= 20.0.0                        |
 
 ## セキュリティ

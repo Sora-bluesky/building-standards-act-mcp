@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawRevisions: vi.fn(),
   searchLaws: vi.fn(),
+  hasSearchCached: vi.fn().mockReturnValue(false),
+  hasRevisionsCached: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../../src/lib/law-resolver.js", () => ({

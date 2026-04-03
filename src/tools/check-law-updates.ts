@@ -6,8 +6,13 @@ import {
   checkLawUpdate,
   checkLawUpdates,
   getLawRevisionHistory,
+  mapWithConcurrency,
+  RATE_LIMIT_DELAY_MS,
+  CONCURRENCY,
+  sleep,
 } from "../lib/revision-tracker.js";
-import type { LawUpdateCheckResult } from "../lib/types.js";
+import { hasSearchCached } from "../lib/egov-client.js";
+import type { LawUpdateCheckResult, ResolvedLaw } from "../lib/types.js";
 
 const registry = new LawRegistry();
 
@@ -152,14 +157,22 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
           return { content: [{ type: "text" as const, text: msg }] };
         }
 
-        // Resolve each alias to get law_id
-        const resolvedLaws = [];
-        for (const alias of aliases) {
-          const resolved = await resolveLawId(alias.title);
-          if (resolved) {
-            resolvedLaws.push(resolved);
-          }
-        }
+        // Resolve each alias to get law_id (concurrent with rate-limit on cache miss)
+        const resolveResults = await mapWithConcurrency(
+          aliases,
+          async (alias) => {
+            const wasCached = hasSearchCached(alias.title);
+            const resolved = await resolveLawId(alias.title);
+            if (!wasCached) {
+              await sleep(RATE_LIMIT_DELAY_MS);
+            }
+            return resolved;
+          },
+          CONCURRENCY,
+        );
+        const resolvedLaws = resolveResults.filter(
+          (r): r is ResolvedLaw => r !== null,
+        );
 
         const results = await checkLawUpdates(resolvedLaws);
         const text = formatSummary(results);

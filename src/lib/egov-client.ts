@@ -172,3 +172,17 @@ export async function getLawRevisions(
   revisionsCache.set(cacheKey, result);
   return result;
 }
+
+/**
+ * Check whether revisions for the given lawId are already cached.
+ */
+export function hasRevisionsCached(lawId: string): boolean {
+  return revisionsCache.has(`revisions:${lawId}`);
+}
+
+/**
+ * Check whether search results for the given lawTitle are already cached.
+ */
+export function hasSearchCached(lawTitle: string): boolean {
+  return searchCache.has(`search:${lawTitle}`);
+}
