@@ -64,21 +64,6 @@ const ALL_KOKUJI_PRESETS: KokujiPreset[] = [
   },
   {
     law_id: "",
-    law_num: "平成十二年建設省告示第千三百五十二号",
-    title: "木造建築物の軸組の設置の基準を定める件",
-    abbrev: ["壁量バランス告示", "軸組設置基準告示"],
-    delegated_by: "建築基準法施行令",
-  },
-  {
-    law_id: "",
-    law_num: "令和六年国土交通省告示第四百四十七号",
-    title:
-      "建築基準法施行令第四十六条第四項表一（一）項から（七）項までに掲げる軸組と同等以上の耐力を有する軸組及び当該軸組に係る倍率の数値を定める件等の一部を改正する告示",
-    abbrev: ["壁量改正告示", "令和7年壁量告示"],
-    delegated_by: "建築基準法施行令",
-  },
-  {
-    law_id: "",
     law_num: "平成二十八年国土交通省告示第二百六十五号",
     title:
       "建築物エネルギー消費性能基準等を定める省令における算出方法等に係る事項",
@@ -100,7 +85,7 @@ const ALL_KOKUJI_PRESETS: KokujiPreset[] = [
 /**
  * Registry for looking up kokuji (ministerial notification) presets.
  *
- * Contains 11 major kokuji relevant to building standards law.
+ * Contains 9 major kokuji relevant to building standards law.
  * These are sourced from the MLIT pipeline since e-Gov API v2
  * does not include kokuji in its law search endpoint.
  */

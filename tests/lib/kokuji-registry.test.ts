@@ -5,9 +5,9 @@ describe("KokujiRegistry", () => {
   const registry = new KokujiRegistry();
 
   describe("getAll", () => {
-    it("returns 11 kokuji presets", () => {
+    it("returns 9 kokuji presets", () => {
       const all = registry.getAll();
-      expect(all).toHaveLength(11);
+      expect(all).toHaveLength(9);
     });
 
     it("returns a defensive copy (different reference each call)", () => {
