@@ -16,7 +16,7 @@ const schema = {
 export function registerSearchLawTool(server: McpServer): void {
   server.tool(
     "search_law",
-    "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。",
+    "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。注意: 検索対象は法令名（タイトル）のみ。条文本文のキーワード検索は不可。条文内の用語を探す場合は get_law で条番号を直接指定するか、get_full_law で全文取得してください。",
     schema,
     wrapToolHandler("search_law", async ({ keyword }) => {
       // Search aliases first
