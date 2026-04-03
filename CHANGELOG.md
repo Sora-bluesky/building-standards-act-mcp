@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-04-03
+
+### Added
+
+- **Error sanitization** (OWASP MCP06): Unknown errors return generic user-facing messages; internal details (status codes, endpoints, stack traces) are logged server-side only
+- **Audit logging** (OWASP MCP09): All tool invocations are logged with input params, duration, and result status via structured JSON to stderr
+- **`wrapToolHandler` utility**: Centralized error handling and audit logging for all 10 tools, eliminating duplicated catch blocks
+- **`recordToolCall` integration**: Tool call metrics (previously defined but unused) are now automatically recorded by the wrapper
+
+### Changed
+
+- Known errors (`LawNotFoundError`, `ArticleNotFoundError`, `KokujiNotFoundError`) still return their user-friendly messages
+- `EgovApiError` responses no longer expose HTTP status codes or API endpoint URLs
+- Server version updated to 1.6.0
+
 ## [1.5.0] - 2026-04-03
 
 ### Added

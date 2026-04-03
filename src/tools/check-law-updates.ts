@@ -13,6 +13,7 @@ import {
 } from "../lib/revision-tracker.js";
 import { hasSearchCached } from "../lib/egov-client.js";
 import type { LawUpdateCheckResult, ResolvedLaw } from "../lib/types.js";
+import { wrapToolHandler } from "../lib/tool-helpers.js";
 
 const registry = new LawRegistry();
 
@@ -120,8 +121,9 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
     "check_law_updates",
     "法令の改正状況をe-Gov APIで確認する。法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示が可能。",
     schema,
-    async ({ law_name, group, show_history }) => {
-      try {
+    wrapToolHandler(
+      "check_law_updates",
+      async ({ law_name, group, show_history }) => {
         // Single law check with optional history
         if (law_name) {
           const resolved = await resolveLawId(law_name);
@@ -178,13 +180,7 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
         const text = formatSummary(results);
 
         return { content: [{ type: "text" as const, text }] };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ type: "text" as const, text: `エラー: ${message}` }],
-          isError: true,
-        };
-      }
-    },
+      },
+    ),
   );
 }

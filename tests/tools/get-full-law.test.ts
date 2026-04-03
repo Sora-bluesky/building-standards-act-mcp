@@ -97,6 +97,8 @@ describe("get_full_law tool", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("エラー");
-    expect(result.content[0].text).toContain("e-Gov API returned 503");
+    // Sanitized: internal error details are hidden from client
+    expect(result.content[0].text).not.toContain("503");
+    expect(result.content[0].text).toContain("内部エラー");
   });
 });
