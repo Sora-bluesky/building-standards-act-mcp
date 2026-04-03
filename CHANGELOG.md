@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-04-03
+
+### Fixed
+
+- **check_law_updates の廃止誤検出を修正**: e-Gov API が返す `repeal_status: "None"`（大文字N）を `"none"`（小文字n）と比較していたため、全法令が「廃止」と誤判定されていた。大文字小文字を無視する比較に修正
+
 ## [1.4.0] - 2026-04-01
 
 ### Added
