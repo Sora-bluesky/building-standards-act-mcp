@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-10-16
+
+### Fixed
+
+- `get_laws_batch` limits each article to 8,000 characters by default (`max_chars_per_item`) and the serialized JSON response to 60,000 characters (`max_total_chars`), omitting later bodies when needed. A measured seven-article batch returned 138,544 characters, including 129,085 characters from 建築基準法施行規則 第1条の3 alone. Text pages prefer line boundaries; structured results keep whole leading paragraphs. The continuation hint names `get_law` with the offset and the same `max_chars`, so following it keeps each response small.
+- `get_law` adds `max_chars` and `offset` for text bodies, with a default cap of 100,000 characters. Continuation offsets address the article body and accept `next_offset` from `get_laws_batch`; structured format is unchanged. A paged response lists only the references found in that page (施行規則 第1条の3 carried about 35,000 characters of references on every page before this).
+
 ## [1.9.0] - 2026-10-16
 
 ### Breaking
