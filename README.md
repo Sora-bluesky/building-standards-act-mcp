@@ -159,12 +159,12 @@ npm run build
 | `law_name`       | 法令名（正式名称または略称）                            | `建築基準法`, `建基法`       |
 | `article_number` | 条文番号（附則・別表にも対応）                          | `第20条`, `附則`, `別表第一` |
 | `format`         | 出力形式（`text` または `structured`、省略時は `text`） | `structured`                 |
-| `max_chars`      | 本文と参照一覧（`references`）を合わせた最大文字数（1,000〜500,000、既定 100,000）。`format=text` のみ | `8000` |
+| `max_chars`      | 本文と参照一覧（`references`）を合わせた最大文字数（1,000〜500,000、既定 100,000）。ページ内の参照が収まるよう本文を短くする。`format=text` のみ | `8000` |
 | `offset`         | 本文内の開始位置（既定 0）。`format=text` のみ。続きは `next_offset` を指定 | `8000` |
 
 `offset` は見出し・参照・出典を含まない本文内の文字位置です。`get_laws_batch` の `next_offset` をそのまま指定できます。
 
-参照一覧はページ内の本文に現れる参照に絞ったうえで、本文と参照のJSONの長さの合計が `max_chars` に収まる順序どおりの先頭部分だけを表示します。省略時は `references_total` と `references_truncated: true`、表示件数の案内を返します。`max_chars` を小さくして取得すると、ページごとの参照が表示されます。
+参照一覧はページ内の本文に現れる参照に絞り、本文と参照のJSONの長さの合計が `max_chars` に収まるようページの本文を短くします。本文全体を1ページで取得できる場合は、従来どおり全参照を返します。最小ページでも参照が収まらない場合だけ、本文を `max_chars` で区切り、残りの文字数に収まる参照を順序どおりの先頭部分から表示します。この場合は `references_total` と `references_truncated: true`、表示件数の案内を返します。参照が0件の場合、`references` は返しません。
 
 #### `get_full_law`
 

@@ -31,6 +31,7 @@ import {
   parseArticleStructured,
 } from "../../src/lib/egov-parser.js";
 import { resolveLawId } from "../../src/lib/law-resolver.js";
+import * as toolHelpers from "../../src/lib/tool-helpers.js";
 
 const MOCK_RESOLVED = {
   law_id: "325AC0000000201",
@@ -439,7 +440,11 @@ describe("get_law tool", () => {
       });
       expect(result.isError).toBeUndefined();
       const expected = offset < text.length ? [references[offset / 700]] : [];
-      expect(result.structuredContent.article.references).toEqual(expected);
+      if (expected.length > 0) {
+        expect(result.structuredContent.article.references).toEqual(expected);
+      } else {
+        expect(result.structuredContent.article).not.toHaveProperty("references");
+      }
       expect(result.structuredContent.article.text).toBe(
         offset < text.length
           ? text.slice(offset, offset + 700)
@@ -457,34 +462,102 @@ describe("get_law tool", () => {
     },
   );
 
-  it.each([false, true])("budgets the reference prefix without changing the body (paged=%s)", async (paged) => {
-    const references = [
-      { raw_text: "第一条", ref_type: "same_law" as const },
-      { raw_text: "第二条", ref_type: "cross_law" as const, target_law: "あ".repeat(1_000) },
-      { raw_text: "第三条", ref_type: "same_law" as const },
-    ];
-    const pageText = `${"第一条 第二条 第三条".padEnd(1_100, "あ")}\n`;
-    const text = pageText + (paged ? "い".repeat(1_200) : "");
+  it.each([1_000, 2_000, 8_000])("paginates the entire body with all page references within %i characters", async (maxChars) => {
+    const references = Array.from({ length: 200 }, (_, index) => ({
+      raw_text: `ref${String(index).padStart(3, "0")}`, ref_type: "same_law" as const,
+    }));
+    const text = references.map((ref) => `${ref.raw_text.padEnd(99, "a")}\n`).join("");
     const article = { article_num: "20", article_title: "第二十条", article_caption: "", text, references };
-    const maxChars = pageText.length + JSON.stringify([references[0], references[2]]).length;
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
+    vi.mocked(parseArticle).mockReturnValue(article);
+
+    const pages: string[] = [];
+    let offset: number | null = 0;
+    let visited = 0;
+    while (offset !== null) {
+      const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: maxChars, offset });
+      expect(result.isError).toBeUndefined();
+      const page = result.structuredContent;
+      const pageReferences = references.filter((ref) => page.article.text.includes(ref.raw_text));
+      expect(page.offset).toBe(visited);
+      expect(page.total_chars).toBe(text.length);
+      expect(pageReferences.length).toBeGreaterThan(0);
+      expect(page.article.references).toEqual(pageReferences);
+      expect(page.article.text.length + JSON.stringify(pageReferences).length).toBeLessThanOrEqual(maxChars);
+      expect(page).not.toHaveProperty("references_total");
+      expect(page).not.toHaveProperty("references_truncated");
+      expect(result.content[0].text.split("\n").filter((line: string) => line.startsWith("  - ["))).toEqual(
+        pageReferences.map((ref) => `  - [同法令] ${ref.raw_text}`),
+      );
+      expect(page.article.text).toBe(text.slice(visited, visited + page.article.text.length));
+      visited += page.article.text.length;
+      if (page.next_offset !== null) {
+        expect(page.next_offset).toBe(visited);
+        expect(page.next_offset).toBeGreaterThan(offset);
+        expect(result.content[0].text).toContain(`offset=${page.next_offset} を指定して続きを取得してください`);
+      }
+      expect(page.truncated).toBe(page.next_offset !== null);
+      expect(result.content[0].text).not.toContain("件のうち");
+      pages.push(page.article.text);
+      offset = page.next_offset;
+    }
+    expect(visited).toBe(text.length);
+    expect(pages.join("")).toBe(text);
+    expect(article).toEqual({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
+  });
+
+  it("uses logarithmic probes for a law-sized article with many references", async () => {
+    const references = Array.from({ length: 1_591 }, (_, index) => ({
+      raw_text: `ref${String(index).padStart(4, "0")}`, ref_type: "same_law" as const,
+    }));
+    const text = references.map((ref) => `${ref.raw_text.padEnd(79, "a")}\n`).join("").padEnd(129_085, "a");
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
+    vi.mocked(parseArticle).mockReturnValue({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
+    const paginate = vi.spyOn(toolHelpers, "paginateAtLineBoundary");
+    try {
+      const maxChars = 60_000;
+      const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: maxChars });
+      const page = result.structuredContent;
+      expect(result.isError).toBeUndefined();
+      expect(page.article.references.length).toBeGreaterThan(0);
+      expect(page.article.text.length + JSON.stringify(page.article.references).length).toBeLessThanOrEqual(maxChars);
+      expect(paginate.mock.calls.length).toBeLessThanOrEqual(1 + Math.ceil(Math.log2(maxChars)));
+      expect(page).not.toHaveProperty("references_truncated");
+    } finally {
+      paginate.mockRestore();
+    }
+  });
+
+  it("falls back to an ordered reference prefix when even the smallest page cannot fit all references", async () => {
+    const references = [
+      { raw_text: "x", ref_type: "same_law" as const },
+      { raw_text: "x", ref_type: "cross_law" as const, target_law: "あ".repeat(1_000) },
+      { raw_text: "x", ref_type: "relative" as const },
+    ];
+    const text = "x".padEnd(100, "a");
+    const article = { article_num: "20", article_title: "第二十条", article_caption: "", text, references };
+    const maxChars = 1_000;
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
     vi.mocked(parseArticle).mockReturnValue(article);
 
     const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: maxChars });
     const page = result.structuredContent;
-    expect(page.article.text).toBe(pageText);
+    expect(page.article.text).toBe(text);
     expect(page.article.references).toEqual([references[0]]);
     expect(page).toMatchObject({
       references_total: 3, references_truncated: true, total_chars: text.length,
-      next_offset: paged ? pageText.length : null, truncated: paged,
+      next_offset: null, truncated: false,
     });
+    expect(JSON.stringify(references).length).toBeGreaterThan(maxChars);
     expect(page.article.text.length + JSON.stringify(page.article.references).length).toBeLessThanOrEqual(maxChars);
     expect(page.article.text.length + JSON.stringify(references.slice(0, 2)).length).toBeGreaterThan(maxChars);
-    expect(result.content[0].text).toContain("  - [同法令] 第一条");
-    expect(result.content[0].text).not.toContain("  - [他法令] 第二条");
-    expect(result.content[0].text).not.toContain("  - [同法令] 第三条");
-    expect(result.content[0].text).toContain("（参照 3 件のうち 1 件を表示。本文が max_chars に近いため残りは省略。max_chars を小さくして取得するとページごとの参照が表示されます）");
+    expect(result.content[0].text).toContain("  - [同法令] x");
+    expect(result.content[0].text).not.toContain("  - [他法令] x");
+    expect(result.content[0].text).not.toContain("  - [相対参照] x");
+    expect(result.content[0].text).toContain("（参照 3 件のうち 1 件を表示。参照だけで max_chars を超えるため残りは省略。max_chars を大きくすると表示されます）");
     expect(article).toEqual({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
     const config = mockServer.registerTool.mock.calls[0][1] as { outputSchema: z.ZodRawShape };
     const validated = z.object(config.outputSchema).parse(page);
@@ -493,7 +566,7 @@ describe("get_law tool", () => {
 
   it.each([-1, 0])("counts serialized reference array characters at the budget boundary (%i)", async (adjustment) => {
     const references = [{ raw_text: '第一条 "引用" \\ 😀', ref_type: "same_law" as const }];
-    const text = "あ".repeat(1_100);
+    const text = references[0].raw_text.padEnd(1_100, "あ");
     const maxChars = text.length + JSON.stringify(references).length + adjustment;
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
@@ -501,31 +574,65 @@ describe("get_law tool", () => {
 
     const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: maxChars });
     const page = result.structuredContent;
-    expect(page.article.text).toBe(text);
-    expect(page.article.references).toEqual(adjustment === 0 ? references : []);
-    if (adjustment === 0) {
-      expect(page).not.toHaveProperty("references_total");
-      expect(page).not.toHaveProperty("references_truncated");
-    } else {
-      expect(page).toMatchObject({ references_total: 1, references_truncated: true });
-      expect(result.content[0].text).toContain("参照 1 件のうち 0 件を表示");
-      expect(result.content[0].text).not.toContain("■ 検出された参照:");
-    }
+    expect(page.article.text).toBe(text.slice(0, text.length + adjustment));
+    expect(page.article.references).toEqual(references);
+    expect(page.article.text.length + JSON.stringify(page.article.references).length).toBe(maxChars);
+    expect(page.next_offset).toBe(adjustment === 0 ? null : text.length - 1);
+    expect(page).not.toHaveProperty("references_total");
+    expect(page).not.toHaveProperty("references_truncated");
   });
 
-  it("drops all references when the body fills the budget", async () => {
-    const text = "第一条".padEnd(1_000, "あ");
+  it("omits references when none fit in the fallback body page", async () => {
+    const text = "x".padEnd(1_000, "a");
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "20", article_title: "第二十条", article_caption: "", text,
-      references: [{ raw_text: "第一条", ref_type: "same_law" }],
+      references: [{ raw_text: "x", ref_type: "cross_law", target_law: "あ".repeat(1_000) }],
     });
 
     const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: 1_000 });
-    expect(result.structuredContent.article).toMatchObject({ text, references: [] });
+    expect(result.structuredContent.article.text).toBe(text);
+    expect(result.structuredContent.article).not.toHaveProperty("references");
+    expect(result.structuredContent.article.text.length).toBeLessThanOrEqual(1_000);
     expect(result.structuredContent).toMatchObject({ references_total: 1, references_truncated: true, next_offset: null });
     expect(result.content[0].text).toContain("参照 1 件のうち 0 件を表示");
+    expect(result.content[0].text).not.toContain("■ 検出された参照:");
+  });
+
+  it.each([undefined, []])("omits empty article references (%j)", async (references) => {
+    const text = "a".repeat(1_000);
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
+    vi.mocked(parseArticle).mockReturnValue({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
+
+    const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: 1_000 });
+    expect(result.structuredContent.article.text).toBe(text);
+    expect(result.structuredContent.article).not.toHaveProperty("references");
+    expect(result.structuredContent).not.toHaveProperty("references_total");
+    expect(result.structuredContent).not.toHaveProperty("references_truncated");
+  });
+
+  it("preserves surrogate pairs and continuation offsets when shortening the body for references", async () => {
+    const references = [{ raw_text: "x", ref_type: "same_law" as const }];
+    const bodyLimit = 1_000 - JSON.stringify(references).length;
+    const prefix = "x".padEnd(bodyLimit - 1, "a");
+    const text = `${prefix}😀tail`;
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
+    vi.mocked(parseArticle).mockReturnValue({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
+
+    const first = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: 1_000 });
+    expect(first.structuredContent.article.text).toBe(prefix);
+    expect(first.structuredContent.article.references).toEqual(references);
+    expect(first.structuredContent.next_offset).toBe(prefix.length);
+    const second = await handler({
+      law_name: "建築基準法", article_number: "第20条", max_chars: 1_000, offset: first.structuredContent.next_offset,
+    });
+    expect(second.structuredContent.article.text).toBe("😀tail");
+    expect(second.structuredContent.article).not.toHaveProperty("references");
+    expect(second.structuredContent.next_offset).toBeNull();
+    expect(first.structuredContent.article.text + second.structuredContent.article.text).toBe(text);
   });
 
   it("preserves all references and the exact text output for an unpaged request", async () => {
