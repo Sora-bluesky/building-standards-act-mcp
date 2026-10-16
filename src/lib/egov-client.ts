@@ -222,6 +222,7 @@ export async function searchKeyword(params: {
   const result = await fetchJson<EgovKeywordResponse>(
     `${BASE_URL}/keyword?${cacheKey}`,
   );
+  result.next_offset = result.next_offset ?? null;
   keywordCache.set(cacheKey, result);
   return result;
 }
