@@ -3,7 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveLawId } from "../lib/law-resolver.js";
 import { fetchParsedArticle } from "../lib/article-fetcher.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
-import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import {
+  DEFAULT_MAX_CHARS,
+  paginateAtLineBoundary,
+  TOOL_ANNOTATIONS,
+  wrapToolHandler,
+} from "../lib/tool-helpers.js";
 import {
   parsedArticleSchema,
   structuredArticleSchema,
@@ -26,6 +31,19 @@ const schema = {
     .describe(
       "出力形式。text: 従来のテキスト形式、structured: 条→項→号の階層を持つJSON構造化形式",
     ),
+  max_chars: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(500_000)
+    .default(DEFAULT_MAX_CHARS)
+    .describe("本文の最大文字数（1,000〜500,000）。省略時は100,000文字。format=text のみ適用。"),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .default(0)
+    .describe("本文の取得開始位置（0から始まる文字位置）。続きは案内された offset を指定。format=text のみ適用。"),
 };
 
 const outputSchema = {
@@ -34,6 +52,10 @@ const outputSchema = {
   source: z.literal("e-Gov法令検索"),
   format: z.enum(["text", "structured"]),
   article: z.union([parsedArticleSchema, structuredArticleSchema]),
+  total_chars: z.number().optional(),
+  offset: z.number().optional(),
+  next_offset: z.number().nullable().optional(),
+  truncated: z.boolean().optional(),
   note: z.string().optional(),
   revision_note: z.string().optional(),
   revision: z.object({
@@ -53,7 +75,9 @@ export function registerGetLawTool(server: McpServer): void {
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
     },
-    wrapToolHandler("get_law", async ({ law_name, article_number, format }) => {
+    wrapToolHandler("get_law", async ({
+      law_name, article_number, format, max_chars = DEFAULT_MAX_CHARS, offset = 0,
+    }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {
         throw new LawNotFoundError(law_name);
@@ -96,7 +120,7 @@ export function registerGetLawTool(server: McpServer): void {
         };
       }
 
-      // Default: text format (backward compatible)
+      // Offsets address only the article body, matching get_laws_batch.
       const fetched = await fetchParsedArticle(
         resolved.law_id,
         article_number,
@@ -108,14 +132,22 @@ export function registerGetLawTool(server: McpServer): void {
         throw new ArticleNotFoundError(article_number, resolved.title);
       }
 
+      const page = paginateAtLineBoundary(article.text, offset, max_chars);
+      const references = offset > 0 || page.next_offset !== null
+        ? article.references?.filter((ref) => page.text.includes(ref.raw_text))
+        : article.references;
       const lines = [
         `【${resolved.title}】${article.article_title}`,
         article.article_caption ? article.article_caption : "",
         "",
-        article.text,
+        page.text,
       ].filter((line) => line !== undefined);
 
-      if (article.references && article.references.length > 0) {
+      if (page.next_offset !== null) {
+        lines.push(`（続きがあります。offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${page.total_chars} 文字）`);
+      }
+
+      if (references && references.length > 0) {
         const refLabels: Record<string, string> = {
           cross_law: "他法令",
           same_law: "同法令",
@@ -125,7 +157,7 @@ export function registerGetLawTool(server: McpServer): void {
         };
         lines.push("");
         lines.push("■ 検出された参照:");
-        for (const ref of article.references) {
+        for (const ref of references) {
           const label = refLabels[ref.ref_type] ?? ref.ref_type;
           lines.push(`  - [${label}] ${ref.raw_text}`);
         }
@@ -148,7 +180,11 @@ export function registerGetLawTool(server: McpServer): void {
           law_num: resolved.law_num,
           source: "e-Gov法令検索",
           format: "text",
-          article,
+          article: { ...article, text: page.text, ...(references ? { references } : {}) },
+          total_chars: page.total_chars,
+          offset: page.offset,
+          next_offset: page.next_offset,
+          truncated: page.next_offset !== null,
           ...(fetched?.revision
             ? { revision: fetched.revision, revision_note: fetched.revisionNote }
             : {}),
