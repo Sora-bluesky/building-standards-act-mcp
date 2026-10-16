@@ -424,8 +424,11 @@ function articleMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[
 
 /** Require coverage of every kanji run; overlapping chunks count each character only once. */
 function keywordMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[] {
-  const runs = kanjiRuns(query);
-  const totalChars = query.match(/[\u4E00-\u9FFF]/g)?.length ?? 0;
+  const expanded = expandKokujiAliases(query);
+  const refs = parseArticleRefs(expanded);
+  const stripped = withoutRefs(expanded, refs);
+  const runs = kanjiRuns(stripped).filter((run) => !/^[第条項号法令]+$/.test(run));
+  const totalChars = stripped.match(/[\u4E00-\u9FFF]/g)?.length ?? 0;
   if (runs.length === 0) return [];
   const matches: KokujiMatch[] = [];
   for (const entry of entries) {

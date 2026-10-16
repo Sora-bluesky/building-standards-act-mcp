@@ -178,6 +178,7 @@ describe("mlit-client", () => {
       ["木造建築物の軸組の設置の基準を定める件", "建設省告示第千三百五十二号", "2000-01-01", "", "", "https://example.com/1352.pdf"],
       ["構造耐力上主要な部分である床版又は屋根版に軽量気泡コンクリートパネルを用いる場合における当該床版又は屋根版の構造方法に関する安全上必要な技術的基準を定める件", "国土交通省告示第五百九十九号", "2010-01-01", "", "", "https://example.com/599.pdf"],
       [wallTitle, "建設省告示第千百号", "1981-06-01", "", "", "https://example.com/1100.pdf"],
+      ["船員法第八十条第二項の食料表", "運輸省告示第六十一号", "2000-01-01", "", "", "https://example.com/61.pdf"],
     ];
 
     beforeEach(async () => {
@@ -242,6 +243,16 @@ describe("mlit-client", () => {
       expect(bareMatches.map((match) => match.entry.document_number))
         .toEqual(["国土交通省告示第573号", "建築基準法告示"]);
       expect(bareMatches.every((match) => match.stage === "article")).toBe(true);
+    });
+
+    it.each(["法第2条第9号", "法第２条第９号"])(
+      "does not fall back to reference fragments for %s", async (query) => {
+        expect(await findCandidates(query)).toEqual([]);
+      },
+    );
+
+    it("ignores keyword runs containing only reference particles", async () => {
+      expect(await findCandidates("法第の条第")).toEqual([]);
     });
 
     it("prefers a named law and specific paragraph over a bare or article-only reference", async () => {
@@ -309,12 +320,17 @@ describe("mlit-client", () => {
         .toBe(false);
     });
 
-    it("keeps fuzzy matching for allowable-stress calculation titles", async () => {
+    it.each([
+      "許容応力度計算等の基準",
+      "法第2条第9号の許容応力度計算等の基準",
+    ])("keeps fuzzy matching for allowable-stress calculation titles: %s", async (query) => {
       await setupHappyPath(MOCK_NOTICE_HTML, [
         ...rows,
         ["許容応力度等計算の基準を定める件", "計算告示", "2000-01-01", "", "", "https://example.com/stress.pdf"],
       ]);
-      const [match] = await findCandidates("許容応力度計算等の基準");
+      const matches = await findCandidates(query);
+      expect(matches).toHaveLength(1);
+      const [match] = matches;
       expect(match.entry.document_number).toBe("計算告示");
       expect(match.stage).toBe("keyword");
       expect(match.score).toBeCloseTo(0.7);
