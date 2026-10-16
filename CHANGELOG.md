@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-10-17
+
+### Fixed
+
+- `search_articles` treats HTTP 404 with `{"code":"404001","message":"取得結果が０件です。"}` from `/keyword` as a cached zero-hit result instead of a communication error. HTTP 404 responses carrying an e-Gov code no longer count as circuit-breaker failures, so repeated zero-hit searches do not block other tools; uncoded 404 responses and server errors still count. Full-width spaces and repeated whitespace are normalized to single half-width spaces for requests, cache keys, and echoed keywords. Descriptions now state that half-width-space-separated words perform AND search and that AND/OR/NOT are plain search words, not operators.
+- `get_law` counts the text body and serialized references against the same `max_chars` budget, keeping references in order after filtering them to the current page. Dropped references are reported with `references_total` and `references_truncated`. A measured call for 建築基準法施行規則 第1条の3 with `max_chars=60000` returned a 59,999-character body plus 881 references (74,640 characters as JSON), totaling 135,729 characters in `structuredContent`. With `max_chars=200000`, the full 129,085-character body plus references reached 277,861 characters even without body truncation. After this change the same calls return 61,142 and 201,937 characters; the remainder above `max_chars` is response metadata.
+- `get_laws_batch` lowers the default `max_total_chars` from 60,000 to 40,000 and the maximum `max_chars_per_item` from 50,000 to 30,000, retaining the per-item default of 8,000. A downstream call with `max_chars_per_item=50000` returned 51,383 characters for one article. A measured seven-article batch (including 建築基準法施行規則 第1条の3) returns 15,936 characters with the defaults and 38,326 characters with `max_chars_per_item=30000`. Tool descriptions direct long articles such as 建築基準法施行規則 第1条の3 to `get_law` for individual retrieval.
+
 ## [1.9.1] - 2026-10-16
 
 ### Fixed
