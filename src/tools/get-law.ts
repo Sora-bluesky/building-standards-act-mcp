@@ -37,7 +37,7 @@ const schema = {
     .min(1_000)
     .max(500_000)
     .default(DEFAULT_MAX_CHARS)
-    .describe("本文と参照一覧（references）を合わせた最大文字数（1,000〜500,000）。ページ内の参照が収まるよう本文を短くします。省略時は100,000文字。format=text のみ適用。"),
+    .describe("本文と参照一覧（references）を合わせた最大文字数（1,000〜500,000）。省略時は100,000文字。format=text のみ適用。"),
   offset: z
     .number()
     .int()
@@ -134,42 +134,12 @@ export function registerGetLawTool(server: McpServer): void {
         throw new ArticleNotFoundError(article_number, resolved.title);
       }
 
-      const { references: allReferences = [], ...articleBody } = article;
-      const bodyPage = paginateAtLineBoundary(article.text, offset, max_chars);
-      // Every candidate is a prefix of the body-only page; match each reference once.
-      const referenceEnds = allReferences.map((ref) => {
-        const start = bodyPage.text.indexOf(ref.raw_text);
-        return start < 0 ? Infinity : start + ref.raw_text.length;
-      });
-      const getPage = (page: typeof bodyPage) => {
-        const references = offset > 0 || page.next_offset !== null
-          ? allReferences.filter((_, index) => referenceEnds[index] <= page.text.length)
-          : allReferences;
-        const referenceChars = references.length > 0 ? JSON.stringify(references).length : 0;
-        return { page, references, fits: page.text.length + referenceChars <= max_chars };
-      };
-
-      const initial = getPage(bodyPage);
-      let selected = initial.fits ? initial : undefined;
-      if (!selected) {
-        let low = 1;
-        let high = max_chars - 1;
-        while (low <= high) {
-          const limit = Math.floor((low + high) / 2);
-          const candidate = getPage(paginateAtLineBoundary(article.text, offset, limit));
-          if (candidate.fits) {
-            selected = candidate;
-            low = limit + 1;
-          } else {
-            high = limit - 1;
-          }
-        }
-      }
-
-      const { page, references: pageReferences } = selected ?? initial;
+      const page = paginateAtLineBoundary(article.text, offset, max_chars);
+      const pageReferences = offset > 0 || page.next_offset !== null
+        ? article.references?.filter((ref) => page.text.includes(ref.raw_text))
+        : article.references;
       let references = pageReferences;
-      const referencesTruncated = selected === undefined;
-      if (referencesTruncated) {
+      if (pageReferences) {
         let referenceChars = 2;
         let keep = 0;
         for (const ref of pageReferences) {
@@ -180,7 +150,8 @@ export function registerGetLawTool(server: McpServer): void {
         }
         references = pageReferences.slice(0, keep);
       }
-      const referencesTotal = pageReferences.length;
+      const referencesTotal = pageReferences?.length ?? 0;
+      const referencesTruncated = (references?.length ?? 0) < referencesTotal;
       const lines = [
         `【${resolved.title}】${article.article_title}`,
         article.article_caption ? article.article_caption : "",
@@ -208,7 +179,7 @@ export function registerGetLawTool(server: McpServer): void {
         }
       }
       if (referencesTruncated) {
-        lines.push(`（参照 ${referencesTotal} 件のうち ${references.length} 件を表示。参照だけで max_chars を超えるため残りは省略。max_chars を大きくすると表示されます）`);
+        lines.push(`（参照 ${referencesTotal} 件のうち ${references?.length ?? 0} 件を表示。本文が max_chars に近いため残りは省略。max_chars を小さくして取得するとページごとの参照が表示されます）`);
       }
 
       lines.push("");
@@ -228,7 +199,7 @@ export function registerGetLawTool(server: McpServer): void {
           law_num: resolved.law_num,
           source: "e-Gov法令検索",
           format: "text",
-          article: { ...articleBody, text: page.text, ...(references.length > 0 ? { references } : {}) },
+          article: { ...article, text: page.text, ...(references ? { references } : {}) },
           total_chars: page.total_chars,
           offset: page.offset,
           next_offset: page.next_offset,

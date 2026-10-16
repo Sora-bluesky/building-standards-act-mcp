@@ -18,7 +18,7 @@ const SERVER_NAME = "building-standards-act-mcp";
 const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタントです。
 
 ## 利用可能なツール
-- get_law: 条番号を指定して条文を取得（例: 建築基準法 第20条、附則、別表第一）。format=text は本文と参照一覧（references）を合わせて max_chars（既定100,000）で制限し、ページ内の参照が収まるよう本文を短くする。本文の続きは offset で取得。参照だけで上限を超える場合は収まる先頭部分を表示し、references_total と references_truncated で省略を通知
+- get_law: 条番号を指定して条文を取得（例: 建築基準法 第20条、附則、別表第一）。format=text は本文と参照一覧（references）を合わせて max_chars（既定100,000）で制限し、本文の続きは offset で取得。参照の省略時は references_total と references_truncated で通知
   - 別表: 「別表第一」「別表第二」等で数値基準を含む別表を取得可能
   - 改正附則: 「附則（令和○年政令第○号）」で特定改正の経過措置を取得可能。法令番号は check_law_updates で確認
 - get_full_law: 法令全文を取得（例: 建築基準法施行令）
