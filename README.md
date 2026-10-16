@@ -59,8 +59,10 @@ Vercel にデプロイすると、Claude.ai からすぐに使えます。環境
 インストール不要で実行できます。
 
 ```bash
-npx -y building-standards-act-mcp
+npx -y building-standards-act-mcp@latest
 ```
+
+`@latest` を付けると、npx のキャッシュに古い版が残っていても最新版で起動します。
 
 ### Claude Desktop
 
@@ -71,7 +73,7 @@ npx -y building-standards-act-mcp
   "mcpServers": {
     "building-standards-act": {
       "command": "npx",
-      "args": ["-y", "building-standards-act-mcp"]
+      "args": ["-y", "building-standards-act-mcp@latest"]
     }
   }
 }
@@ -80,43 +82,37 @@ npx -y building-standards-act-mcp
 ### Claude Code
 
 ```bash
-claude mcp add building-standards-act -- npx -y building-standards-act-mcp
+claude mcp add building-standards-act -- npx -y building-standards-act-mcp@latest
 ```
 
 #### Windows + VS Code 拡張機能の場合
 
-VS Code 拡張機能では `npx` 経由の起動が `Connection closed` エラーになる場合があります。
-プロジェクトルートに `.mcp.json` を作成してください。
-
-**Step 1: グローバルインストール**
+VS Code 拡張機能では `npx` 経由の起動が `Connection closed` エラーになる場合があります。その場合は、公開中の Vercel 版に HTTP で接続するのが確実です。
 
 ```bash
-npm install -g building-standards-act-mcp
+claude mcp add --transport http building-standards-act https://building-standards-act-mcp.vercel.app/api/mcp
 ```
 
-**Step 2: パスの確認**
-
-```bash
-where node        # → node.exe のフルパス（例: C:\Program Files\nodejs\node.exe）
-npm root -g       # → グローバル node_modules のパス
-```
-
-**Step 3: `.mcp.json` を作成**
-
-取得したパスで置き換えてください（パス区切りは `/` を使用）:
+プロジェクト単位で設定するなら、プロジェクトルートの `.mcp.json` に次を書きます。
 
 ```json
 {
   "mcpServers": {
     "building-standards-act": {
-      "command": "<where node の出力>",
-      "args": ["<npm root -g の出力>/building-standards-act-mcp/dist/index.js"]
+      "type": "http",
+      "url": "https://building-standards-act-mcp.vercel.app/api/mcp"
     }
   }
 }
 ```
 
-> **注意**: `.mcp.json` にはマシン固有のパスが含まれるため、`.gitignore` に追加してください。
+ローカルの stdio で動かしたい場合は、`npx` を `cmd /c` で包みます。
+
+```bash
+claude mcp add building-standards-act -- cmd /c npx -y building-standards-act-mcp@latest
+```
+
+> **注意**: グローバルインストールした `dist/index.js` のパスを `.mcp.json` に直接書く方法は使わないでください。パッケージの更新・削除やフォルダの移動で、エラーを出さずに接続できなくなります。
 
 ### ローカル（ソースから）
 
@@ -566,7 +562,7 @@ e-Gov API は告示を収録していないため、`get_kokuji` は国土交通
   "mcpServers": {
     "building-standards-act": {
       "command": "npx",
-      "args": ["-y", "building-standards-act-mcp"],
+      "args": ["-y", "building-standards-act-mcp@latest"],
       "env": {
         "BUILDING_LAW_CACHE": "file"
       }
