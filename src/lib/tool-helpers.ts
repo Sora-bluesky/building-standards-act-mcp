@@ -4,6 +4,7 @@
  * - Audit logging (Measure 6: log tool invocations and results)
  */
 
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { logger } from "./logger.js";
 import { recordToolCall } from "./metrics.js";
 import {
@@ -13,10 +14,18 @@ import {
 } from "./errors.js";
 import { EgovApiError } from "./errors.js";
 
+export const TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const satisfies ToolAnnotations;
+
 /** MCP CallToolResult shape (minimal interface to avoid SDK dependency). */
 interface ToolResult {
   [key: string]: unknown;
   content: Array<{ type: "text"; text: string }>;
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 

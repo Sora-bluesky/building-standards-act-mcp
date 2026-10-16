@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.0] - 2026-10-16
 
+### Added
+
+- **ツール定義の現行化**: 10 ツールすべてを `server.tool()` から `registerTool()` に移行し、`title` と annotations（`readOnlyHint: true` / `destructiveHint: false` / `idempotentHint: true` / `openWorldHint: true`）を宣言。クライアントが各ツールを読み取り専用として扱えるようになった
+- **structuredContent**: `get_law` / `get_laws_batch` / `analyze_article` / `get_metrics` / `verify_citation` に `outputSchema` を定義し、text に加えて同じ内容を `structuredContent` で返す。呼び出し側で JSON 文字列を再パースする必要がなくなった
+
 ### Changed
 
 - **依存更新**: `@modelcontextprotocol/sdk` を ^1.26 から ^1.32.1 へ更新（1.32.0 で修正された OAuth クライアントの HIGH 脆弱性を含む）。`npm audit fix` で本番依存の脆弱性 10 件（critical 1 / high 5 / moderate 3 / low 1）を 0 件に

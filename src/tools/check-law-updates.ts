@@ -13,7 +13,7 @@ import {
 } from "../lib/revision-tracker.js";
 import { hasSearchCached } from "../lib/egov-client.js";
 import type { LawUpdateCheckResult, ResolvedLaw } from "../lib/types.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
 const registry = new LawRegistry();
 
@@ -117,10 +117,14 @@ function formatHistory(result: LawUpdateCheckResult): string {
 }
 
 export function registerCheckLawUpdatesTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "check_law_updates",
-    "法令の改正状況をe-Gov APIで確認する。法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示が可能。",
-    schema,
+    {
+      title: "改正状況確認",
+      description: "法令の改正状況をe-Gov APIで確認する。法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示が可能。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+    },
     wrapToolHandler(
       "check_law_updates",
       async ({ law_name, group, show_history }) => {

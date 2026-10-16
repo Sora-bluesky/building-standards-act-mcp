@@ -494,6 +494,32 @@ describe("Integration: MCP Server Tools", () => {
       ]);
     });
 
+    it("exposes titles, read-only annotations and exactly five output schemas", async () => {
+      const { tools } = await client.listTools();
+
+      expect(tools).toHaveLength(10);
+      for (const tool of tools) {
+        expect(tool.title).toBeTruthy();
+        expect(tool.annotations).toMatchObject({
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        });
+      }
+      const structuredTools = tools
+        .filter((tool) => tool.outputSchema)
+        .map((tool) => tool.name)
+        .sort();
+      expect(structuredTools).toEqual([
+        "analyze_article",
+        "get_law",
+        "get_laws_batch",
+        "get_metrics",
+        "verify_citation",
+      ]);
+    });
+
     it("each tool has a description and input schema", async () => {
       const { tools } = await client.listTools();
 
@@ -516,6 +542,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("【建築基準法】第二十条");
       expect(text).toContain("（構造耐力）");
@@ -533,6 +560,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("【建築基準法】第二十条");
       expect(text).toContain("建築物は、自重");
@@ -547,6 +575,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("第一条");
       expect(text).toContain("この法律は、建築物の敷地");
@@ -570,6 +599,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       const text = getText(result);
       expect(text).toContain("エラー");
       expect(text).toContain("存在しない法律テスト");
@@ -584,6 +614,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       const text = getText(result);
       expect(text).toContain("エラー");
       expect(text).toContain("9999");
@@ -599,6 +630,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       const text = getText(result);
       expect(text).toContain("エラー");
     });
@@ -616,6 +648,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       const parsed = JSON.parse(text);
       expect(parsed.law_title).toBe("建築基準法");
@@ -643,6 +676,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("【建築基準法】第一条");
       expect(text).toContain("この法律は、建築物の敷地");
@@ -1090,6 +1124,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       const parsed = JSON.parse(text);
       expect(parsed.total).toBe(2);
@@ -1140,6 +1175,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const parsed = JSON.parse(getText(result));
       expect(parsed.total).toBe(3);
       expect(parsed.success).toBe(1);
@@ -1156,6 +1192,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       const text = getText(result);
       expect(text).toContain("空です");
     });
@@ -1175,6 +1212,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("引用検証結果");
       expect(text).toContain("[OK]");
@@ -1200,6 +1238,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("[N/A]");
       expect(text).toContain("未発見");
@@ -1223,6 +1262,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       expect(text).toContain("[OK]");
     });
@@ -1234,6 +1274,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       expect(getText(result)).toContain("空です");
     });
   });
@@ -1289,6 +1330,7 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toBeDefined();
       const text = getText(result);
       const parsed = JSON.parse(text);
       expect(parsed.law_name).toBe("建築基準法");
@@ -1318,7 +1360,27 @@ describe("Integration: MCP Server Tools", () => {
       });
 
       expect(result.isError).toBe(true);
+      expect(result).not.toHaveProperty("structuredContent");
       expect(getText(result)).toContain("エラー");
+    });
+  });
+
+  describe("get_metrics", () => {
+    it("returns populated metrics with structuredContent through the SDK", async () => {
+      const result = await client.callTool({ name: "get_metrics", arguments: {} });
+
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual(JSON.parse(getText(result)));
+      expect(result.structuredContent).toMatchObject({
+        uptime_seconds: expect.any(Number),
+        tools: expect.objectContaining({
+          get_law: expect.objectContaining({ calls: expect.any(Number) }),
+        }),
+        api: expect.objectContaining({
+          "/laws": expect.objectContaining({ requests: expect.any(Number) }),
+        }),
+        cache: expect.any(Object),
+      });
     });
   });
 });

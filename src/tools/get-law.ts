@@ -4,7 +4,11 @@ import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import {
+  parsedArticleSchema,
+  structuredArticleSchema,
+} from "../lib/article-schemas.js";
 
 const schema = {
   law_name: z
@@ -25,11 +29,25 @@ const schema = {
     ),
 };
 
+const outputSchema = {
+  law_title: z.string(),
+  law_num: z.string(),
+  source: z.literal("e-Gov法令検索"),
+  format: z.enum(["text", "structured"]),
+  article: z.union([parsedArticleSchema, structuredArticleSchema]),
+  note: z.string().optional(),
+} satisfies z.ZodRawShape;
+
 export function registerGetLawTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "get_law",
-    "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。",
-    schema,
+    {
+      title: "条文取得",
+      description: "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+      outputSchema,
+    },
     wrapToolHandler("get_law", async ({ law_name, article_number, format }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {
@@ -60,6 +78,7 @@ export function registerGetLawTool(server: McpServer): void {
         }
 
         return {
+          structuredContent: { ...response, format: "structured" },
           content: [
             {
               type: "text" as const,
@@ -108,7 +127,21 @@ export function registerGetLawTool(server: McpServer): void {
       }
       const text = lines.join("\n");
 
-      return { content: [{ type: "text" as const, text }] };
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: {
+          law_title: resolved.title,
+          law_num: resolved.law_num,
+          source: "e-Gov法令検索",
+          format: "text",
+          article,
+          ...(resolved.source === "egov_search"
+            ? {
+                note: "この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",
+              }
+            : {}),
+        },
+      };
     }),
   );
 }

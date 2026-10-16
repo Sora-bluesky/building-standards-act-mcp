@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { LawRegistry } from "../lib/law-registry.js";
 import { searchLaws } from "../lib/egov-client.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
 const registry = new LawRegistry();
 
@@ -14,10 +14,14 @@ const schema = {
 };
 
 export function registerSearchLawTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "search_law",
-    "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。注意: 検索対象は法令名（タイトル）のみ。条文本文のキーワード検索は不可。条文内の用語を探す場合は get_law で条番号を直接指定するか、get_full_law で全文取得してください。",
-    schema,
+    {
+      title: "法令名検索",
+      description: "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。注意: 検索対象は法令名（タイトル）のみ。条文本文のキーワード検索は不可。条文内の用語を探す場合は get_law で条番号を直接指定するか、get_full_law で全文取得してください。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+    },
     wrapToolHandler("search_law", async ({ keyword }) => {
       // Search aliases first
       const presetResults = registry.search(keyword);

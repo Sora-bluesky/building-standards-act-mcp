@@ -4,7 +4,8 @@ import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
 import { formatArticleRef } from "../lib/errors.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import { structuredArticleSchema } from "../lib/article-schemas.js";
 import type {
   BatchFetchItem,
   BatchFetchResult,
@@ -32,11 +33,37 @@ const schema = {
     .describe("取得対象の条文リスト（最大20件）"),
 };
 
+const outputSchema = {
+  total: z.number(),
+  success: z.number(),
+  failed: z.number(),
+  results: z.array(
+    z.object({
+      law_name: z.string(),
+      article_number: z.string(),
+      status: z.enum([
+        "success",
+        "law_not_found",
+        "article_not_found",
+        "error",
+      ]),
+      text: z.string().optional(),
+      structured: structuredArticleSchema.optional(),
+      error_message: z.string().optional(),
+    }),
+  ),
+} satisfies z.ZodRawShape;
+
 export function registerGetLawsBatchTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "get_laws_batch",
-    "複数の法令・条文を一括取得する。同一法令の複数条文はAPI呼び出し1回で効率的に処理。最大20件。",
-    schema,
+    {
+      title: "条文一括取得",
+      description: "複数の法令・条文を一括取得する。同一法令の複数条文はAPI呼び出し1回で効率的に処理。最大20件。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+      outputSchema,
+    },
     wrapToolHandler("get_laws_batch", async ({ requests }) => {
       if (requests.length > MAX_REQUESTS) {
         return {
@@ -182,6 +209,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
       };
 
       return {
+        structuredContent: { ...response },
         content: [
           {
             type: "text" as const,

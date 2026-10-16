@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { createServer } from "../server.js";
 import { SERVER_VERSION } from "./version.js";
 
@@ -39,7 +40,10 @@ export async function invokeTool(
 export async function listTools(): Promise<
   Array<{
     name: string;
+    title?: string;
     description?: string;
+    annotations?: Tool["annotations"];
+    outputSchema?: Tool["outputSchema"];
     inputSchema: {
       type: "object";
       properties?: Record<string, object>;
@@ -51,7 +55,10 @@ export async function listTools(): Promise<
   const result = await client.listTools();
   return result.tools as Array<{
     name: string;
+    title?: string;
     description?: string;
+    annotations?: Tool["annotations"];
+    outputSchema?: Tool["outputSchema"];
     inputSchema: {
       type: "object";
       properties?: Record<string, object>;

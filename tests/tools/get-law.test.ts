@@ -33,7 +33,7 @@ const MOCK_RESOLVED = {
 let handler: Function;
 
 const mockServer = {
-  tool: vi.fn((_name: string, _desc: string, _schema: any, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
     handler = fn;
   }),
 };
@@ -45,10 +45,11 @@ describe("get_law tool", () => {
   });
 
   it("registers with correct name", () => {
-    expect(mockServer.tool).toHaveBeenCalledWith(
+    expect(mockServer.registerTool).toHaveBeenCalledWith(
       "get_law",
-      expect.any(String),
-      expect.any(Object),
+      expect.objectContaining({
+        annotations: expect.objectContaining({ readOnlyHint: true }),
+      }),
       expect.any(Function),
     );
   });
@@ -81,6 +82,16 @@ describe("get_law tool", () => {
     expect(result.content[0].text).toContain("（構造耐力）");
     expect(result.content[0].text).toContain("建築物は、自重、積載荷重...");
     expect(result.content[0].text).toContain("e-Gov法令検索");
+    expect(result.content[0].text).toBe(
+      "【建築基準法】第二十条\n（構造耐力）\n\n建築物は、自重、積載荷重...\n\n出典: e-Gov法令検索（法令番号: 昭和二十五年法律第二百一号）",
+    );
+    expect(result.structuredContent).toEqual({
+      law_title: MOCK_RESOLVED.title,
+      law_num: MOCK_RESOLVED.law_num,
+      source: "e-Gov法令検索",
+      format: "text",
+      article: mockArticle,
+    });
 
     expect(getLawData).toHaveBeenCalledWith("325AC0000000201");
     expect(parseArticle).toHaveBeenCalledWith(
@@ -98,6 +109,7 @@ describe("get_law tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("存在しない法律");
     expect(getLawData).not.toHaveBeenCalled();
@@ -118,6 +130,7 @@ describe("get_law tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("第9999条");
   });
@@ -134,6 +147,7 @@ describe("get_law tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("エラー");
     // Sanitized: internal error details are hidden from client
     expect(result.content[0].text).not.toContain("500");
@@ -172,6 +186,19 @@ describe("get_law tool", () => {
     expect(result.content[0].type).toBe("text");
 
     const parsed = JSON.parse(result.content[0].text);
+    expect(result.content[0].text).toBe(
+      JSON.stringify(
+        {
+          law_title: MOCK_RESOLVED.title,
+          law_num: MOCK_RESOLVED.law_num,
+          source: "e-Gov法令検索",
+          article: mockStructured,
+        },
+        null,
+        2,
+      ),
+    );
+    expect(result.structuredContent).toEqual({ ...parsed, format: "structured" });
     expect(parsed.law_title).toBe("建築基準法");
     expect(parsed.law_num).toBe("昭和二十五年法律第二百一号");
     expect(parsed.source).toBe("e-Gov法令検索");
@@ -231,9 +258,51 @@ describe("get_law tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("第9999条");
   });
+
+  it.each(["text", "structured"] as const)(
+    "includes the search note in structuredContent for format=%s",
+    async (format) => {
+      vi.mocked(resolveLawId).mockResolvedValue({
+        ...MOCK_RESOLVED,
+        source: "egov_search",
+      });
+      vi.mocked(getLawData).mockResolvedValue({
+        law_full_text: { tag: "Law", children: [] },
+      } as any);
+      const article = {
+        article_num: "1",
+        article_title: "第一条",
+        article_caption: "",
+        text: "test",
+      };
+      const structured = {
+        article_num: article.article_num,
+        article_title: article.article_title,
+        article_caption: article.article_caption,
+        paragraphs: [],
+      };
+      vi.mocked(parseArticle).mockReturnValue(article);
+      vi.mocked(parseArticleStructured).mockReturnValue(structured);
+
+      const result = await handler({
+        law_name: "建築基準法",
+        article_number: "1",
+        format,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toMatchObject({
+        format,
+        note: "この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",
+        article: format === "text" ? article : structured,
+      });
+      expect(result.content[0].text).toContain(result.structuredContent.note);
+    },
+  );
 
   it("includes reference summary in text format when references exist", async () => {
     const mockLawData = {

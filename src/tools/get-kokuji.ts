@@ -6,7 +6,7 @@ import { findKokujiPdfUrl, searchMlitNotices } from "../lib/mlit-client.js";
 import { extractTextFromPdf } from "../lib/pdf-extractor.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
 const registry = new KokujiRegistry();
 
@@ -86,10 +86,14 @@ async function fetchViaEgov(
 }
 
 export function registerGetKokujiTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "get_kokuji",
-    "建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、見つからない場合はe-Gov APIで検索を試みる。",
-    schema,
+    {
+      title: "告示取得",
+      description: "建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、見つからない場合はe-Gov APIで検索を試みる。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+    },
     wrapToolHandler("get_kokuji", async ({ kokuji_name }) => {
       // Step 1: Check preset registry for known kokuji
       const preset = registry.findByName(kokuji_name);

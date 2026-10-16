@@ -33,7 +33,7 @@ const MOCK_RESOLVED = {
 let handler: Function;
 
 const mockServer = {
-  tool: vi.fn((_name: string, _desc: string, _schema: any, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
     handler = fn;
   }),
 };
@@ -65,10 +65,11 @@ describe("get_laws_batch tool", () => {
   });
 
   it("registers with correct name", () => {
-    expect(mockServer.tool).toHaveBeenCalledWith(
+    expect(mockServer.registerTool).toHaveBeenCalledWith(
       "get_laws_batch",
-      expect.any(String),
-      expect.any(Object),
+      expect.objectContaining({
+        annotations: expect.objectContaining({ readOnlyHint: true }),
+      }),
       expect.any(Function),
     );
   });
@@ -76,6 +77,7 @@ describe("get_laws_batch tool", () => {
   it("returns error for empty requests", async () => {
     const result = await handler({ requests: [] });
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("空です");
   });
 
@@ -87,6 +89,7 @@ describe("get_laws_batch tool", () => {
     }));
     const result = await handler({ requests });
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("上限");
   });
 
@@ -108,6 +111,13 @@ describe("get_laws_batch tool", () => {
     expect(parsed.failed).toBe(0);
     expect(parsed.results[0].status).toBe("success");
     expect(parsed.results[0].text).toContain("建築物は");
+    expect(result.structuredContent).toEqual(parsed);
+    expect(result.structuredContent).toMatchObject({
+      total: 1,
+      success: 1,
+      failed: 0,
+      results: expect.any(Array),
+    });
   });
 
   it("fetches structured format", async () => {
@@ -125,6 +135,7 @@ describe("get_laws_batch tool", () => {
     expect(parsed.results[0].status).toBe("success");
     expect(parsed.results[0].structured).toBeDefined();
     expect(parsed.results[0].structured!.article_num).toBe("20");
+    expect(result.structuredContent).toEqual(parsed);
   });
 
   it("groups same law requests into one API call", async () => {
