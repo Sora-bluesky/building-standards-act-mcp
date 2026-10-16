@@ -439,7 +439,11 @@ describe("get_law tool", () => {
       });
       expect(result.isError).toBeUndefined();
       const expected = offset < text.length ? [references[offset / 700]] : [];
-      expect(result.structuredContent.article.references).toEqual(expected);
+      if (expected.length > 0) {
+        expect(result.structuredContent.article.references).toEqual(expected);
+      } else {
+        expect(result.structuredContent.article).not.toHaveProperty("references");
+      }
       expect(result.structuredContent.article.text).toBe(
         offset < text.length
           ? text.slice(offset, offset + 700)
@@ -484,7 +488,7 @@ describe("get_law tool", () => {
     expect(result.content[0].text).toContain("  - [同法令] 第一条");
     expect(result.content[0].text).not.toContain("  - [他法令] 第二条");
     expect(result.content[0].text).not.toContain("  - [同法令] 第三条");
-    expect(result.content[0].text).toContain("（参照 3 件のうち 1 件を表示。本文が max_chars に近いため残りは省略。max_chars を小さくして取得するとページごとの参照が表示されます）");
+    expect(result.content[0].text).toContain("（参照 3 件のうち 1 件を表示。本文と合わせて max_chars を超える分は省略しました。参照は本文中の記述から抽出したもので、関連法令の一覧は suggest_related でも確認できます）");
     expect(article).toEqual({ article_num: "20", article_title: "第二十条", article_caption: "", text, references });
     const config = mockServer.registerTool.mock.calls[0][1] as { outputSchema: z.ZodRawShape };
     const validated = z.object(config.outputSchema).parse(page);
@@ -502,19 +506,22 @@ describe("get_law tool", () => {
     const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: maxChars });
     const page = result.structuredContent;
     expect(page.article.text).toBe(text);
-    expect(page.article.references).toEqual(adjustment === 0 ? references : []);
+    expect(page.article.text.length + (page.article.references?.length ? JSON.stringify(page.article.references).length : 0)).toBeLessThanOrEqual(maxChars);
     if (adjustment === 0) {
+      expect(page.article.references).toEqual(references);
       expect(page).not.toHaveProperty("references_total");
       expect(page).not.toHaveProperty("references_truncated");
     } else {
+      expect(page.article).not.toHaveProperty("references");
       expect(page).toMatchObject({ references_total: 1, references_truncated: true });
       expect(result.content[0].text).toContain("参照 1 件のうち 0 件を表示");
       expect(result.content[0].text).not.toContain("■ 検出された参照:");
     }
   });
 
-  it("drops all references when the body fills the budget", async () => {
-    const text = "第一条".padEnd(1_000, "あ");
+  it.each([false, true])("omits the references key when the body fills the budget (paged=%s)", async (paged) => {
+    const pageText = "第一条".padEnd(1_000, "あ");
+    const text = pageText + (paged ? "い".repeat(1_000) : "");
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue({ law_full_text: { tag: "Law", children: [] } } as any);
     vi.mocked(parseArticle).mockReturnValue({
@@ -523,9 +530,12 @@ describe("get_law tool", () => {
     });
 
     const result = await handler({ law_name: "建築基準法", article_number: "第20条", max_chars: 1_000 });
-    expect(result.structuredContent.article).toMatchObject({ text, references: [] });
-    expect(result.structuredContent).toMatchObject({ references_total: 1, references_truncated: true, next_offset: null });
-    expect(result.content[0].text).toContain("参照 1 件のうち 0 件を表示");
+    const page = result.structuredContent;
+    expect(page.article.text).toBe(pageText);
+    expect(page.article).not.toHaveProperty("references");
+    expect(page.article.text.length).toBeLessThanOrEqual(1_000);
+    expect(page).toMatchObject({ references_total: 1, references_truncated: true, next_offset: paged ? pageText.length : null });
+    expect(result.content[0].text).toContain("（参照 1 件のうち 0 件を表示。本文と合わせて max_chars を超える分は省略しました。参照は本文中の記述から抽出したもので、関連法令の一覧は suggest_related でも確認できます）");
   });
 
   it("preserves all references and the exact text output for an unpaged request", async () => {

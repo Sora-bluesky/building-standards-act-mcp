@@ -134,10 +134,11 @@ export function registerGetLawTool(server: McpServer): void {
         throw new ArticleNotFoundError(article_number, resolved.title);
       }
 
+      const { references: articleReferences, ...articleWithoutReferences } = article;
       const page = paginateAtLineBoundary(article.text, offset, max_chars);
       const pageReferences = offset > 0 || page.next_offset !== null
-        ? article.references?.filter((ref) => page.text.includes(ref.raw_text))
-        : article.references;
+        ? articleReferences?.filter((ref) => page.text.includes(ref.raw_text))
+        : articleReferences;
       let references = pageReferences;
       if (pageReferences) {
         let referenceChars = 2;
@@ -179,7 +180,7 @@ export function registerGetLawTool(server: McpServer): void {
         }
       }
       if (referencesTruncated) {
-        lines.push(`（参照 ${referencesTotal} 件のうち ${references?.length ?? 0} 件を表示。本文が max_chars に近いため残りは省略。max_chars を小さくして取得するとページごとの参照が表示されます）`);
+        lines.push(`（参照 ${referencesTotal} 件のうち ${references?.length ?? 0} 件を表示。本文と合わせて max_chars を超える分は省略しました。参照は本文中の記述から抽出したもので、関連法令の一覧は suggest_related でも確認できます）`);
       }
 
       lines.push("");
@@ -199,7 +200,7 @@ export function registerGetLawTool(server: McpServer): void {
           law_num: resolved.law_num,
           source: "e-Gov法令検索",
           format: "text",
-          article: { ...article, text: page.text, ...(references ? { references } : {}) },
+          article: { ...articleWithoutReferences, text: page.text, ...(references?.length ? { references } : {}) },
           total_chars: page.total_chars,
           offset: page.offset,
           next_offset: page.next_offset,

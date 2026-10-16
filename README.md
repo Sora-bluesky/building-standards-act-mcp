@@ -164,7 +164,7 @@ npm run build
 
 `offset` は見出し・参照・出典を含まない本文内の文字位置です。`get_laws_batch` の `next_offset` をそのまま指定できます。
 
-参照一覧はページ内の本文に現れる参照に絞ったうえで、本文と参照のJSONの長さの合計が `max_chars` に収まる順序どおりの先頭部分だけを表示します。省略時は `references_total` と `references_truncated: true`、表示件数の案内を返します。`max_chars` を小さくして取得すると、ページごとの参照が表示されます。
+参照一覧はページ内の本文に現れる参照に絞ったうえで、本文と参照のJSONの長さの合計が `max_chars` に収まる順序どおりの先頭部分だけを表示し、表示が0件なら `article` の `references` キーを省略します。参照を省略した場合は `references_total` と `references_truncated: true`、表示件数の案内を返し、関連法令の一覧は `suggest_related` でも確認できます。
 
 #### `get_full_law`
 
