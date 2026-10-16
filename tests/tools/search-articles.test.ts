@@ -63,6 +63,25 @@ describe("search_articles", () => {
     expect(result.content[0].text).not.toContain("次の offset");
   });
 
+  it.each([0, 1])("returns an explicit null offset when next_offset is undefined with %i hits", async (totalCount) => {
+    vi.mocked(searchKeyword).mockResolvedValue({
+      ...response,
+      total_count: totalCount,
+      sentence_count: totalCount === 0 ? 0 : response.sentence_count,
+      next_offset: undefined,
+      items: totalCount === 0 ? [] : response.items,
+    } as unknown as EgovKeywordResponse);
+
+    const result = await handler({ keyword: "三百平方メートル", limit: 8, offset: 0 });
+    const structuredContent = result.structuredContent!;
+
+    expect(result.isError).toBeUndefined();
+    expect("next_offset" in structuredContent).toBe(true);
+    expect(structuredContent.next_offset).toBe(null);
+    expect(JSON.parse(JSON.stringify(structuredContent)).next_offset).toBe(null);
+    expect(result.content[0].text).not.toContain("次の offset");
+  });
+
   it("returns the LawNotFoundError message before searching an unknown law", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(null);
     const result = await handler({ keyword: "耐火構造", law_title: "不明な法律", limit: 10, offset: 0 });

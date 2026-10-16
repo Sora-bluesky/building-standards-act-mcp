@@ -71,14 +71,14 @@ export function registerSearchArticlesTool(server: McpServer): void {
         law_title: resolved?.title,
         total_count: result.total_count,
         sentence_count: result.sentence_count,
-        next_offset: result.next_offset,
+        next_offset: result.next_offset ?? null,
         hits,
       };
       const lines = [
         `## 条文本文検索結果「${keyword}」`,
         `該当件数: ${result.total_count}件（今回取得: ${result.sentence_count}文）`,
       ];
-      if (result.next_offset !== null) {
+      if (typeof result.next_offset === "number") {
         lines.push(`次の offset: ${result.next_offset}`);
       }
       if (hits.length === 0) {
