@@ -16,7 +16,7 @@ AI の建築法規回答に含まれるハルシネーションを、条文原�
 - **法令全文取得** — 法令全体のテキストを取得
 - **告示取得** — 建築基準法が技術基準を委任している告示を国土交通省の告示データベース（PDF）から取得
 - **検索ファースト** — e-Gov API 検索による動的な法令解決。プリセットに限らず、e-Gov 収録の全法令を取得可能
-- **略称マップ** — 建築基準法・消防法・都市計画法ほか 112 法令の略称を登録済み。「建基法」「都計法」「消防法」等の略称で指定可能
+- **略称マップ** — 建築基準法・消防法・都市計画法ほか 116 法令の略称を登録済み。「建基法」「都計法」「消防法」等の略称で指定可能
 - **キャッシュ** — 検索 30 分・法令データ 24 時間の TTL キャッシュ（永続化オプションあり）
 - **API 耐障害性** — 自動リトライ（exponential backoff）+ サーキットブレーカー
 - **運用可視化** — 構造化 JSON ログ + 使用量メトリクス（`get_metrics` ツール）
@@ -25,27 +25,29 @@ AI の建築法規回答に含まれるハルシネーションを、条文原�
 
 Vercel にデプロイすると、Claude.ai からすぐに使えます。環境変数の設定は不要です（e-Gov API は公開 API）。
 
+公開インスタンス: `https://building-standards-act-mcp.vercel.app/api/mcp`（自分でデプロイしなくても、この URL をそのまま Custom Connector に登録できます）
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSora-bluesky%2Fbuilding-standards-act-mcp)
 
 ### Claude.ai でのセットアップ（Free/Pro/Max/Team/Enterprise）
 
-> **注意**: Custom Connectors はベータ版のため、接続が不安定な場合があります。安定してご利用いただくには [npx（ローカル）でのセットアップ](#npx推奨)もご検討ください。
+> Custom Connectors は Free / Pro / Max / Team / Enterprise の各プランで利用できます（Free プランは 1 件まで）。ローカルで動かしたい場合は [npx（ローカル）でのセットアップ](#npx推奨) を参照してください。
 
-1. 上の「Deploy with Vercel」ボタンでデプロイ（ワンクリック）
-2. [claude.ai](https://claude.ai) → プロフィールアイコン → Settings → Connectors
-3. 「Add custom connector」をクリック
-4. URL に `https://your-app.vercel.app/api/mcp`（your-app をデプロイ先に置換）を入力
+1. 公開インスタンスを使う場合はこの手順を飛ばす。自分でホストする場合は上の「Deploy with Vercel」ボタンでデプロイ（ワンクリック）
+2. [claude.ai](https://claude.ai) → Customize → Connectors
+3. 「+ Add」→「Add custom connector」をクリック
+4. URL に `https://building-standards-act-mcp.vercel.app/api/mcp`（自分でデプロイした場合はその URL）を入力し、認証は「No sign in」を選択
 5. チャットで「+」→「Connectors」→ building-standards-act を有効化
 6. 「建築基準法第20条を教えて」と質問
 
 > 参考: [Get started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)
 
-### Vercel Free tier の制限事項
+### Vercel での実行時間
 
-- 関数の実行時間が **10 秒** に制限されます（Pro プランでは 60 秒）
-- `get_kokuji`（告示取得）は PDF ダウンロード + パースが重いため、タイムアウトする場合があります
-- `check_law_updates` の大規模グループ（9章: 53法令）は Free tier ではタイムアウトする場合があります（Pro プランでは並行実行により対応可能）
-- `BUILDING_LAW_REQUEST_TIMEOUT=8000` を設定してタイムアウトを短縮できます
+- Vercel Functions の実行時間は Hobby プランでも既定 300 秒です（Fluid compute）。本リポの `vercel.json` は `maxDuration` を 60 秒に設定しています
+- `get_kokuji`（告示取得）は PDF ダウンロード + パースが重いため、60 秒を超える場合は `vercel.json` の `maxDuration` を引き上げてください
+- `check_law_updates` の大規模グループ（9章: 53法令）は最大 5 並行で実行します（`BUILDING_LAW_CONCURRENCY` で調整可能）
+- `BUILDING_LAW_REQUEST_TIMEOUT=8000` を設定して e-Gov API 呼び出しのタイムアウトを短縮できます
 
 ---
 
@@ -315,9 +317,9 @@ AI が建築法規について回答する際、条文の引用ミスや存在�
 → 「第20条第1項第三号の記載に誤りがあります。正しくは…」
 ```
 
-## 対応法令一覧（112 法令 + e-Gov 全法令）
+## 対応法令一覧（116 法令 + e-Gov 全法令）
 
-> 以下の 112 法令は略称マップに登録済みです。略称マップに含まれない法令も、正式名称を指定すれば e-Gov API 検索で動的に取得できます。
+> 以下の 116 法令は略称マップに登録済みです。略称マップに含まれない法令も、正式名称を指定すれば e-Gov API 検索で動的に取得できます。
 
 ### 総則（4 法令）
 

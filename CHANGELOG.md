@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-16
+
+### Changed
+
+- **依存更新**: `@modelcontextprotocol/sdk` を ^1.26 から ^1.32.1 へ更新（1.32.0 で修正された OAuth クライアントの HIGH 脆弱性を含む）。`npm audit fix` で本番依存の脆弱性 10 件（critical 1 / high 5 / moderate 3 / low 1）を 0 件に
+- **CI**: cross-platform-test の Node.js マトリクスに 24 を追加（20 / 22 / 24）。CONTRIBUTING の記載を実態に合わせて修正
+- **版表記の一元化**: `src/lib/version.ts` の `SERVER_VERSION` を唯一の版の出所とし、MCP サーバー情報・OpenAPI `info.version`（旧 0.5.0）・MLIT 向け User-Agent（旧 1.5）・内部クライアント（旧 1.0.0）がすべて `package.json` と同じ版を名乗るように変更。版の不一致はユニットテストで検出
+
+### Documentation
+
+- README: Vercel の実 URL（`https://building-standards-act-mcp.vercel.app/api/mcp`）を記載。Claude.ai Custom Connectors の「ベータ版」注記と Vercel Hobby の「10 秒」制限を現状（Hobby は既定 300 秒、本リポは `maxDuration` 60 秒）に更新。略称マップの法令数を実数（116）に修正
+- `public/index.html` の接続先案内を README と揃えた（ChatGPT Actions / Gemini CLI の記述を削除）
+- CHANGELOG に欠けていた 1.7.0 の項を git 履歴から復元
+
+## [1.7.0] - 2026-04-03
+
+### Changed
+
+- **告示プリセットの撤去**: ハードコードされていた告示プリセット 9 件を削除し、`get_kokuji` は国土交通省の告示データベースから常に動的に取得する設計に統一（改正後の陳腐化とハルシネーション検査の迂回を防ぐため）
+- **告示タイトルの 3 段階マッチング**: `findKokujiPdfUrl()` を「完全一致 → 部分一致 → 漢字チャンクのキーワード一致（50% 閾値）」の 3 段階に拡張。「許容応力度計算等の方法を定める件」のような省略表記でも MLIT の正式タイトルに当たるように
+- **取得失敗時の類似告示提案**: `searchMlitNotices()` による候補提示を追加
+- **search_law の範囲を明記**: ツール説明とサーバー INSTRUCTIONS に「検索対象は法令名（タイトル）のみ」と明示し、別表・改正附則の取得方法を案内
+
 ## [1.6.0] - 2026-04-03
 
 ### Added

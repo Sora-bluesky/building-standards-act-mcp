@@ -92,7 +92,7 @@ PR に対して以下が自動実行されます:
 - **build**: TypeScript ビルド
 - **test**: vitest による全テスト実行
 - **MCP protocol test**: サーバー起動 + JSON-RPC 応答確認
-- **マトリクス**: macOS + Ubuntu, Node.js 18/20/22（6 ジョブ）
+- **マトリクス**: macOS + Ubuntu, Node.js 20/22/24（6 ジョブ）
 
 ## Pull Request
 

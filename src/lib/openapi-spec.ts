@@ -1,4 +1,5 @@
 import { listTools } from "./tool-invoker.js";
+import { SERVER_VERSION } from "./version.js";
 
 const EXCLUDED_TOOLS = new Set(["validate_presets", "get_metrics"]);
 
@@ -105,7 +106,7 @@ export async function generateOpenApiSpec(
     openapi: "3.1.0",
     info: {
       title: "Building Standards Act MCP — REST API",
-      version: "0.5.0",
+      version: SERVER_VERSION,
       description:
         "Japanese building regulations API. Fetches law text from e-Gov API v2 to prevent AI hallucination in building permit reviews.",
     },
