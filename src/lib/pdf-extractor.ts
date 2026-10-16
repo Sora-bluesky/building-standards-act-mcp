@@ -55,16 +55,21 @@ export function isAllowedPdfUrl(url: string): boolean {
 const PDF_USER_AGENT =
   "BuildingStandardsActMCP/1.5 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
 
-const pdfTextCache = createCache<string>("pdf-text", PDF_TEXT_CACHE_TTL);
+export interface PdfTextResult {
+  text: string;
+  lastModified: string | null;
+}
+
+const pdfTextCache = createCache<PdfTextResult>("pdf-text", PDF_TEXT_CACHE_TTL);
 
 /**
  * Fetch a PDF binary from a URL with timeout handling.
  *
  * @param url - The URL to fetch
- * @returns The PDF data as a Uint8Array
+ * @returns The PDF data and its Last-Modified UTC date, if available
  * @throws Error if the fetch fails or times out
  */
-async function fetchPdfBuffer(url: string): Promise<Uint8Array> {
+async function fetchPdf(url: string): Promise<{ data: Uint8Array; lastModified: string | null }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -79,7 +84,12 @@ async function fetchPdfBuffer(url: string): Promise<Uint8Array> {
       );
     }
     const buffer = await response.arrayBuffer();
-    return new Uint8Array(buffer);
+    const header = response.headers.get("Last-Modified");
+    const timestamp = header === null ? NaN : Date.parse(header);
+    const lastModified = Number.isNaN(timestamp)
+      ? null
+      : new Date(timestamp).toISOString().slice(0, 10);
+    return { data: new Uint8Array(buffer), lastModified };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`PDF取得がタイムアウトしました: ${url}`);
@@ -108,23 +118,24 @@ function normalizeText(raw: string): string {
  * Results are cached for 24 hours to avoid redundant downloads.
  *
  * @param pdfUrl - The URL of the PDF to download and parse
- * @returns The extracted text content
+ * @returns The extracted text content and the Last-Modified UTC date, if available
  * @throws Error if the PDF cannot be fetched or parsed
  */
-export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
+export async function extractPdfText(pdfUrl: string): Promise<PdfTextResult> {
   if (!isAllowedPdfUrl(pdfUrl)) {
     throw new Error(
       "許可されていないURLです: PDFは指定された政府サイトからのみ取得できます",
     );
   }
 
-  const cacheKey = `pdf:${pdfUrl}`;
+  // Do not reuse legacy file-cache entries containing only a text string.
+  const cacheKey = `pdf-result:${pdfUrl}`;
   const cached = pdfTextCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const data = await fetchPdfBuffer(pdfUrl);
+  const { data, lastModified } = await fetchPdf(pdfUrl);
 
   // Lazy import: pdfjs-dist may need native-like APIs (DOMMatrix, etc.).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -156,6 +167,12 @@ export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
     throw new Error(`PDFからテキストを抽出できませんでした: ${pdfUrl}`);
   }
 
-  pdfTextCache.set(cacheKey, text);
-  return text;
+  const result = { text, lastModified };
+  pdfTextCache.set(cacheKey, result);
+  return result;
+}
+
+/** Preserve the text-only API for callers that do not need PDF metadata. */
+export async function extractTextFromPdf(pdfUrl: string): Promise<string> {
+  return (await extractPdfText(pdfUrl)).text;
 }
