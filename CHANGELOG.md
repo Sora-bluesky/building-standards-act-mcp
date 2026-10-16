@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-10-16
+
+### Breaking
+
+- **Node.js 22.12 or newer is required** (`engines` was `>=20.0.0`). Node 20 reached end of life on 2026-04-30, and the test toolchain (Vitest 5) no longer runs on it. CI covers Node 22 and 24 on macOS and Ubuntu.
+
+### Changed
+
+- `get_kokuji` resolves article references such as 「令46条4項」 and term aliases before keyword matching, so references no longer match unrelated notices, and candidate lists show which terms matched.
+- `get_kokuji` states how current the MLIT database PDF is (its latest listed amendment). Notice S56-1100, for example, is served without its 2025 amendment.
+- zod 4 and Vitest 5 (with `@vitest/coverage-v8` 5).
+- README recommends `npx -y building-standards-act-mcp@latest` and the Vercel HTTP endpoint for Windows + VS Code instead of a hard-coded global install path.
+
+### Fixed
+
+- `search_articles` no longer fails output validation (`-32602 ... next_offset`) when e-Gov omits `next_offset` on the last page.
+
 ## [1.8.1] - 2026-10-16
 
 ### Fixed
