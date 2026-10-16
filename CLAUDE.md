@@ -12,19 +12,21 @@ npm test         # vitest run
 
 ## Architecture
 
-- **Tool pattern**: `src/tools/xxx.ts` exports `registerXxxTool(server)`, registered in `src/server.ts` (10 tools)
+- **Tool pattern**: `src/tools/xxx.ts` exports `registerXxxTool(server)`, registered in `src/server.ts` (11 tools). Tools use `server.registerTool()` with `title`, read-only `annotations`, and `outputSchema` + `structuredContent` where the result is structured
 - **Lib pattern**: Business logic lives in `src/lib/`; tools handle only formatting + error wrapping via `wrapToolHandler`
 - **Law resolver**: `src/lib/law-resolver.ts` — abbreviation expansion + e-Gov API search for dynamic `law_id` resolution
-- **Alias map**: `src/data/law-aliases.ts` — 112 laws with `title`, `abbrev`, `group`
+- **Alias map**: `src/data/law-aliases.ts` — 116 laws with `title`, `abbrev`, `group`
 - **Error handling**: `src/lib/tool-helpers.ts` — centralized error sanitization + audit logging for all tools
-- **Test pattern**: `vi.mock()` for egov-client/egov-parser, `mockServer.tool` to capture handlers
+- **Test pattern**: `vi.mock()` for egov-client/egov-parser, `mockServer.registerTool` to capture handlers
 
 ## API Constraints
 
 | Endpoint                    | Cache TTL | Note               |
 | --------------------------- | --------- | ------------------ |
-| `/api/2/laws`               | 30min     | Keyword search     |
-| `/api/2/law_data/{id}`      | 24h       | Law text retrieval |
+| `/api/2/laws`               | 30min     | Law title search   |
+| `/api/2/law_data/{id}`      | 24h       | Full law text (`get_full_law`, supplementary provisions, appended tables) |
+| `/api/2/law_data/{id}?elm=` | 24h       | Single article (`get_law` and friends); cache key is law id + elm |
+| `/api/2/keyword`            | 30min     | Article full-text search (`search_articles`) |
 | `/api/2/law_revisions/{id}` | 1h        | Revision history   |
 
 - Rate limit: 200ms between concurrent API calls (5 workers), configurable via `BUILDING_LAW_RATE_LIMIT_MS` / `BUILDING_LAW_CONCURRENCY`
