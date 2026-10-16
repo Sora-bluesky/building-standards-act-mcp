@@ -1,2 +1,2 @@
 /** Must match package.json `version`; a unit test enforces this. */
-export const SERVER_VERSION = "1.8.0";
+export const SERVER_VERSION = "1.8.1";

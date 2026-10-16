@@ -1,7 +1,15 @@
 {
   "name": "building-standards-act-mcp",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "MCP server for Japanese building regulations — fetches law text from e-Gov API v2 to prevent AI hallucination in building permit reviews",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sora-bluesky/building-standards-act-mcp.git"
+  },
+  "homepage": "https://github.com/Sora-bluesky/building-standards-act-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Sora-bluesky/building-standards-act-mcp/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
