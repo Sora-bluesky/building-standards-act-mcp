@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { verifyCitation } from "../lib/citation-verifier.js";
 import { formatArticleRef } from "../lib/errors.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 import type { CitationVerification } from "../lib/types.js";
 
 const MAX_CITATIONS = 10;
@@ -26,6 +26,31 @@ const schema = {
     .max(10)
     .describe("検証対象の引用リスト（最大10件）"),
 };
+
+const outputSchema = {
+  total: z.number(),
+  verified: z.number(),
+  mismatch: z.number(),
+  not_found: z.number(),
+  error: z.number(),
+  results: z.array(
+    z.object({
+      law_name: z.string(),
+      article_number: z.string(),
+      status: z.enum([
+        "verified",
+        "mismatch",
+        "article_not_found",
+        "law_not_found",
+        "error",
+      ]),
+      actual_text: z.string().optional(),
+      match_score: z.number().optional(),
+      mismatch_detail: z.string().optional(),
+      error_message: z.string().optional(),
+    }),
+  ),
+} satisfies z.ZodRawShape;
 
 function formatResults(results: CitationVerification[]): string {
   const verified = results.filter((r) => r.status === "verified");
@@ -78,10 +103,15 @@ function formatResults(results: CitationVerification[]): string {
 }
 
 export function registerVerifyCitationTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "verify_citation",
-    "AIの回答に含まれる法令引用を検証する。条文の存在確認、テキスト照合による正確性チェックが可能。最大10件。",
-    schema,
+    {
+      title: "引用検証",
+      description: "AIの回答に含まれる法令引用を検証する。条文の存在確認、テキスト照合による正確性チェックが可能。最大10件。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+      outputSchema,
+    },
     wrapToolHandler("verify_citation", async ({ citations }) => {
       if (citations.length === 0) {
         return {
@@ -119,7 +149,20 @@ export function registerVerifyCitationTool(server: McpServer): void {
       }
 
       const text = formatResults(results);
-      return { content: [{ type: "text" as const, text }] };
+      return {
+        content: [{ type: "text" as const, text }],
+        structuredContent: {
+          total: results.length,
+          verified: results.filter((r) => r.status === "verified").length,
+          mismatch: results.filter((r) => r.status === "mismatch").length,
+          not_found: results.filter(
+            (r) =>
+              r.status === "article_not_found" || r.status === "law_not_found",
+          ).length,
+          error: results.filter((r) => r.status === "error").length,
+          results,
+        },
+      };
     }),
   );
 }

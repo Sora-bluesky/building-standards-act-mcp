@@ -30,7 +30,7 @@ import { extractTextFromPdf } from "../../src/lib/pdf-extractor.js";
 let handler: Function;
 
 const mockServer = {
-  tool: vi.fn((_name: string, _desc: string, _schema: any, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
     handler = fn;
   }),
 };
@@ -42,10 +42,11 @@ describe("get_kokuji tool", () => {
   });
 
   it("registers with correct name", () => {
-    expect(mockServer.tool).toHaveBeenCalledWith(
+    expect(mockServer.registerTool).toHaveBeenCalledWith(
       "get_kokuji",
-      expect.any(String),
-      expect.any(Object),
+      expect.objectContaining({
+        annotations: expect.objectContaining({ readOnlyHint: true }),
+      }),
       expect.any(Function),
     );
   });

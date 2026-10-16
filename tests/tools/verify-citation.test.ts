@@ -28,7 +28,7 @@ const MOCK_RESOLVED = {
 let handler: Function;
 
 const mockServer = {
-  tool: vi.fn((_name: string, _desc: string, _schema: any, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
     handler = fn;
   }),
 };
@@ -53,10 +53,11 @@ describe("verify_citation tool", () => {
   });
 
   it("registers with correct name", () => {
-    expect(mockServer.tool).toHaveBeenCalledWith(
+    expect(mockServer.registerTool).toHaveBeenCalledWith(
       "verify_citation",
-      expect.any(String),
-      expect.any(Object),
+      expect.objectContaining({
+        annotations: expect.objectContaining({ readOnlyHint: true }),
+      }),
       expect.any(Function),
     );
   });
@@ -64,6 +65,7 @@ describe("verify_citation tool", () => {
   it("returns error for empty citations", async () => {
     const result = await handler({ citations: [] });
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("空です");
   });
 
@@ -74,6 +76,7 @@ describe("verify_citation tool", () => {
     }));
     const result = await handler({ citations });
     expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("上限");
   });
 
@@ -91,6 +94,17 @@ describe("verify_citation tool", () => {
     expect(text).toContain("引用検証結果");
     expect(text).toContain("[OK]");
     expect(text).toContain("正確: 1件");
+    expect(text).toBe(
+      `## 引用検証結果\n\n- 検証対象: 1件\n- 正確: 1件\n\n### [OK] 建築基準法 第1条\n- 実際の条文: ${MOCK_ARTICLE.text}`,
+    );
+    expect(result.structuredContent).toEqual({
+      total: 1,
+      verified: 1,
+      mismatch: 0,
+      not_found: 0,
+      error: 0,
+      results: [expect.objectContaining({ status: "verified" })],
+    });
   });
 
   it("detects mismatch for wrong claimed_text", async () => {
@@ -111,6 +125,7 @@ describe("verify_citation tool", () => {
     const text = result.content[0].text;
     expect(text).toContain("[NG]");
     expect(text).toContain("不一致");
+    expect(result.structuredContent).toMatchObject({ mismatch: 1, verified: 0 });
   });
 
   it("reports law_not_found", async () => {
@@ -123,6 +138,7 @@ describe("verify_citation tool", () => {
     const text = result.content[0].text;
     expect(text).toContain("[N/A]");
     expect(text).toContain("未発見: 1件");
+    expect(result.structuredContent).toMatchObject({ not_found: 1, verified: 0 });
   });
 
   it("verifies multiple citations in one call", async () => {

@@ -13,7 +13,7 @@ import { searchLaws } from "../../src/lib/egov-client.js";
 let handler: Function;
 
 const mockServer = {
-  tool: vi.fn((_name: string, _desc: string, _schema: any, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
     handler = fn;
   }),
 };
@@ -25,10 +25,11 @@ describe("search_law tool", () => {
   });
 
   it("registers with correct name", () => {
-    expect(mockServer.tool).toHaveBeenCalledWith(
+    expect(mockServer.registerTool).toHaveBeenCalledWith(
       "search_law",
-      expect.any(String),
-      expect.any(Object),
+      expect.objectContaining({
+        annotations: expect.objectContaining({ readOnlyHint: true }),
+      }),
       expect.any(Function),
     );
   });

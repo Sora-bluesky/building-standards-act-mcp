@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findRelatedLaws } from "../lib/related-law-finder.js";
 import { formatArticleRef } from "../lib/errors.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 import type { RelatedLawSuggestion } from "../lib/types.js";
 
 const schema = {
@@ -62,10 +62,14 @@ function formatSuggestion(result: RelatedLawSuggestion): string {
 }
 
 export function registerSuggestRelatedTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "suggest_related",
-    "指定した条文が参照している関連法令・委任先・同法令内参照を自動抽出して提案する。",
-    schema,
+    {
+      title: "関連法令提案",
+      description: "指定した条文が参照している関連法令・委任先・同法令内参照を自動抽出して提案する。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+    },
     wrapToolHandler("suggest_related", async ({ law_name, article_number }) => {
       const result = await findRelatedLaws(law_name, article_number);
       const text = formatSuggestion(result);

@@ -4,7 +4,7 @@ import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import { LawNotFoundError } from "../lib/errors.js";
-import { wrapToolHandler } from "../lib/tool-helpers.js";
+import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
 const schema = {
   law_name: z
@@ -16,10 +16,14 @@ const schema = {
 };
 
 export function registerGetFullLawTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "get_full_law",
-    "法令の全文を取得する。条番号を指定せず法令全体のテキストを返す。",
-    schema,
+    {
+      title: "法令全文取得",
+      description: "法令の全文を取得する。条番号を指定せず法令全体のテキストを返す。",
+      inputSchema: schema,
+      annotations: TOOL_ANNOTATIONS,
+    },
     wrapToolHandler("get_full_law", async ({ law_name }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {
