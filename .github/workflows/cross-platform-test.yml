@@ -14,7 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest]
-        node-version: [20, 22, 24]
+        # Node 20 reached end of life on 2026-04-30; Vitest 5 needs Node >= 22.12; the published package still declares engines >= 20.
+        node-version: [22, 24]
 
     steps:
       - uses: actions/checkout@v4

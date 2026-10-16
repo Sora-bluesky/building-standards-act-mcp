@@ -50,3 +50,4 @@ package/
 
 # === Reference materials (internal) ===
 .references/
+.vitest/

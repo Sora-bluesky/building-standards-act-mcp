@@ -46,7 +46,7 @@ Do NOT run `npm publish` or `gh release create` manually.
 ## Package Constraints
 
 - **xlsx package is banned**: Prototype Pollution vulnerability. Use jszip + manual XML parsing instead.
-- **Node.js >= 20.0.0**: Node 18 is unsupported (pdfjs-dist DOMMatrix requirement)
+- **Node.js >= 22.12.0**: Node 20 reached end of life on 2026-04-30 and Vitest 5 requires 22.12+; Node 18 is also unsupported (pdfjs-dist DOMMatrix requirement)
 - **pdfjs-dist serverless**: On Vercel Node 20/22, DOMMatrix polyfill is required (top of `pdf-extractor.ts`), and `vercel.json` `includeFiles` must bundle the worker (`pdf.worker.mjs`)
 
 ## Language
