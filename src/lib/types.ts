@@ -169,6 +169,11 @@ export interface BatchFetchItem {
   structured?: StructuredArticle;
   revision_note?: string;
   error_message?: string;
+  truncated?: boolean;
+  next_offset?: number | null;
+  total_chars?: number;
+  omitted?: boolean;
+  note?: string;
 }
 
 export interface BatchFetchResult {
@@ -176,6 +181,8 @@ export interface BatchFetchResult {
   success: number;
   failed: number;
   results: BatchFetchItem[];
+  omitted?: Array<{ law_name: string; article_number: string }>;
+  note?: string;
 }
 
 // Citation verification result

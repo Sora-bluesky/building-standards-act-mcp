@@ -16,11 +16,11 @@ import { EgovApiError } from "./errors.js";
 
 export const DEFAULT_MAX_CHARS = 100_000;
 
-/** Paginate UTF-16 text without cutting a surrogate pair. */
-export function paginateText(
+function paginate(
   text: string,
   offset: number,
   maxChars: number,
+  atLineBoundary: boolean,
 ): {
   text: string;
   total_chars: number;
@@ -52,11 +52,27 @@ export function paginateText(
     end += end - offset === 1 ? 1 : -1;
   }
 
+  if (atLineBoundary && end < total_chars) {
+    const newline = text.lastIndexOf("\n", end - 1);
+    if (newline > offset + maxChars / 2) end = newline + 1;
+  }
+
   const next_offset = end < total_chars ? end : null;
-  const note = next_offset === null
+  return { text: text.slice(offset, end), total_chars, offset, next_offset };
+}
+
+/** Paginate UTF-16 text without cutting a surrogate pair. */
+export function paginateText(text: string, offset: number, maxChars: number) {
+  const page = paginate(text, offset, maxChars, false);
+  const note = page.next_offset === null
     ? ""
-    : `\n\n（続きがあります。offset=${next_offset} を指定して続きを取得してください。全体 ${total_chars} 文字）`;
-  return { text: text.slice(offset, end) + note, total_chars, offset, next_offset };
+    : `\n\n（続きがあります。offset=${page.next_offset} を指定して続きを取得してください。全体 ${page.total_chars} 文字）`;
+  return { ...page, text: page.text + note };
+}
+
+/** Prefer a line boundary in the second half of the page, without adding a note. */
+export function paginateAtLineBoundary(text: string, offset: number, maxChars: number) {
+  return paginate(text, offset, maxChars, true);
 }
 
 export const TOOL_ANNOTATIONS = {

@@ -6,6 +6,7 @@ vi.mock("../../src/lib/metrics.js", () => ({
 }));
 
 import {
+  paginateAtLineBoundary,
   paginateText,
   handleToolError,
   wrapToolHandler,
@@ -75,6 +76,69 @@ describe("paginateText", () => {
     const first = paginateText("😀い", 0, 1);
     expect(first.next_offset).toBe(2);
     expect(first.text).toMatch(/^😀\n\n/);
+  });
+});
+
+describe("paginateAtLineBoundary", () => {
+  it("cuts just after a newline past the midpoint without adding a note", () => {
+    expect(paginateAtLineBoundary("aaaaaa\nbbbbbbb", 0, 10)).toEqual({
+      text: "aaaaaa\n", total_chars: 14, offset: 0, next_offset: 7,
+    });
+    expect(paginateAtLineBoundary("skipaaaaaa\nbbbbbbb", 4, 10)).toMatchObject({
+      text: "aaaaaa\n", offset: 4, next_offset: 11,
+    });
+  });
+
+  it.each(["aa\nbbbbbbbbbbb", "aaaaa\nbbbbbbbb"])(
+    "uses the character limit when the newline is at or before the midpoint: %s",
+    (text) => {
+      expect(paginateAtLineBoundary(text, 0, 10)).toMatchObject({
+        text: text.slice(0, 10), next_offset: 10,
+      });
+    },
+  );
+
+  it("keeps a complete final page even when it contains a newline", () => {
+    expect(paginateAtLineBoundary("aaaaaa\nb", 0, 10)).toMatchObject({
+      text: "aaaaaa\nb", next_offset: null,
+    });
+  });
+
+  it("preserves surrogate pairs and normalizes offsets inside them", () => {
+    expect(paginateAtLineBoundary("あ😀い", 0, 2)).toMatchObject({
+      text: "あ", next_offset: 1,
+    });
+    expect(paginateAtLineBoundary("あ😀い", 2, 3)).toMatchObject({
+      text: "😀い", offset: 1, next_offset: null,
+    });
+    expect(paginateAtLineBoundary("😀い", 0, 1)).toMatchObject({
+      text: "😀", next_offset: 2,
+    });
+  });
+
+  it.each([1, 2, 3, 8, 10])("reconstructs the exact body with a page size of %i", (maxChars) => {
+    const text = "😀あいうえ\n次の項😀\n表の行\n末尾😀";
+    const pages: string[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const page = paginateAtLineBoundary(text, offset, maxChars);
+      expect(page.offset).toBe(offset);
+      if (page.next_offset !== null) expect(page.next_offset).toBeGreaterThan(offset);
+      expect(page.text).not.toMatch(/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/u);
+      pages.push(page.text);
+      offset = page.next_offset;
+    }
+    expect(pages.join("")).toBe(text);
+  });
+
+  it.each([4, 10])("matches paginateText for offset %i at or past the end", (offset) => {
+    expect(paginateAtLineBoundary("法令本文", offset, 3)).toEqual(
+      paginateText("法令本文", offset, 3),
+    );
+  });
+
+  it("matches paginateText for empty text", () => {
+    expect(paginateAtLineBoundary("", 0, 3)).toEqual(paginateText("", 0, 3));
   });
 });
 

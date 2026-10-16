@@ -144,6 +144,10 @@ describe("get_law tool", () => {
       source: "e-Gov法令検索",
       format: "text",
       article: mockArticle,
+      total_chars: mockArticle.text.length,
+      offset: 0,
+      next_offset: null,
+      truncated: false,
     });
 
     expect(getLawArticle).toHaveBeenCalledWith("325AC0000000201", "MainProvision-Article_20");
@@ -232,6 +236,8 @@ describe("get_law tool", () => {
       law_name: "建築基準法",
       article_number: "第20条",
       format: "structured",
+      max_chars: 1_000,
+      offset: 999_999,
     });
 
     expect(result.isError).toBeUndefined();
@@ -293,6 +299,60 @@ describe("get_law tool", () => {
     expect(result.content[0].text).toContain("テスト条文");
     expect(parseArticle).toHaveBeenCalled();
     expect(parseArticleStructured).not.toHaveBeenCalled();
+  });
+
+  it("reconstructs the article body by following next_offset", async () => {
+    const text = `${"あ".repeat(650)}😀\n${"い".repeat(650)}\n${"う".repeat(650)}`;
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({
+      law_full_text: { tag: "Law", children: [] },
+    } as any);
+    vi.mocked(parseArticle).mockReturnValue({
+      article_num: "20", article_title: "第二十条", article_caption: "（構造耐力）", text,
+    });
+
+    const pages: string[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const result = await handler({
+        law_name: "建築基準法", article_number: "第20条", max_chars: 1_000, offset,
+      });
+      expect(result.isError).toBeUndefined();
+      const page = result.structuredContent;
+      expect(page.offset).toBe(offset);
+      expect(page.total_chars).toBe(text.length);
+      expect(page.article.text.length).toBeLessThanOrEqual(1_000);
+      expect(result.content[0].text).toContain("【建築基準法】第二十条");
+      expect(result.content[0].text).toContain(`\n\n${page.article.text}`);
+      expect(page.truncated).toBe(page.next_offset !== null);
+      if (page.next_offset !== null) {
+        expect(page.next_offset).toBeGreaterThan(offset);
+        expect(page.article.text.endsWith("\n")).toBe(true);
+        expect(result.content[0].text).toContain(
+          `（続きがあります。offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${text.length} 文字）`,
+        );
+      }
+      pages.push(page.article.text);
+      offset = page.next_offset;
+    }
+    expect(pages).toHaveLength(3);
+    expect(pages.join("")).toBe(text);
+  });
+
+  it("caps the default text body at 100,000 characters", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue({
+      law_full_text: { tag: "Law", children: [] },
+    } as any);
+    vi.mocked(parseArticle).mockReturnValue({
+      article_num: "20", article_title: "第二十条", article_caption: "", text: "あ".repeat(100_500),
+    });
+
+    const result = await handler({ law_name: "建築基準法", article_number: "20" });
+    expect(result.structuredContent.article.text).toHaveLength(100_000);
+    expect(result.structuredContent).toMatchObject({
+      total_chars: 100_500, offset: 0, next_offset: 100_000, truncated: true,
+    });
   });
 
   it("returns error when structured article not found", async () => {
@@ -357,7 +417,44 @@ describe("get_law tool", () => {
     },
   );
 
-  it("includes reference summary in text format when references exist", async () => {
+  it.each([0, 1_000, 2_000, 3_000])(
+    "includes only references present in the page body at offset %i",
+    async (offset) => {
+      const references = ["第一条", "第二条", "第三条"].map((raw_text) => ({
+        raw_text, ref_type: "same_law" as const,
+      }));
+      const text = references.map((ref) => `${"あ".repeat(997)}${ref.raw_text}`).join("");
+      const article = {
+        article_num: "20", article_title: "第二十条", article_caption: "", text, references,
+      };
+      vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+      vi.mocked(getLawArticle).mockResolvedValue({
+        law_full_text: { tag: "Law", children: [] },
+      } as any);
+      vi.mocked(parseArticle).mockReturnValue(article);
+
+      const result = await handler({
+        law_name: "建築基準法", article_number: "第20条", max_chars: 1_000, offset,
+      });
+      expect(result.isError).toBeUndefined();
+      const expected = offset < text.length ? [references[offset / 1_000]] : [];
+      expect(result.structuredContent.article.references).toEqual(expected);
+      expect(result.structuredContent.article.text).toBe(
+        offset < text.length
+          ? text.slice(offset, offset + 1_000)
+          : `指定された offset=${offset} は本文の末尾以降です（全体 ${text.length} 文字）。`,
+      );
+      expect(result.structuredContent.next_offset).toBe(offset < 2_000 ? offset + 1_000 : null);
+      expect(result.content[0].text.includes("■ 検出された参照:")).toBe(expected.length > 0);
+      for (const ref of references) {
+        expect(result.content[0].text.includes(`  - [同法令] ${ref.raw_text}`)).toBe(expected.includes(ref));
+      }
+      expect(article.references).toEqual(references);
+      expect(article.text).toBe(text);
+    },
+  );
+
+  it("preserves all references and the exact text output for an unpaged request", async () => {
     const mockLawData = {
       law_full_text: { tag: "Law", children: [] },
     };
@@ -372,6 +469,10 @@ describe("get_law tool", () => {
           ref_type: "cross_law" as const,
           target_law: "建築基準法施行令",
           target_article: "36",
+        },
+        {
+          raw_text: "前条",
+          ref_type: "relative" as const,
         },
       ],
     };
@@ -388,5 +489,10 @@ describe("get_law tool", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("■ 検出された参照:");
     expect(result.content[0].text).toContain("[他法令] 建築基準法施行令第36条");
+    expect(result.content[0].text).toBe(
+      `【建築基準法】第二十条\n\n\n${mockArticle.text}\n\n■ 検出された参照:\n  - [他法令] 建築基準法施行令第36条\n  - [相対参照] 前条\n\n出典: e-Gov法令検索（法令番号: 昭和二十五年法律第二百一号）`,
+    );
+    expect(result.structuredContent.article).toEqual(mockArticle);
+    expect(result.structuredContent).toMatchObject({ offset: 0, next_offset: null });
   });
 });

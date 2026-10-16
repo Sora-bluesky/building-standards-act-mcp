@@ -3,7 +3,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveLawId } from "../lib/law-resolver.js";
 import { fetchParsedArticle } from "../lib/article-fetcher.js";
 import { ArticleNotFoundError, formatArticleRef } from "../lib/errors.js";
-import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import {
+  paginateAtLineBoundary,
+  TOOL_ANNOTATIONS,
+  wrapToolHandler,
+} from "../lib/tool-helpers.js";
 import { structuredArticleSchema } from "../lib/article-schemas.js";
 import type {
   BatchFetchItem,
@@ -12,6 +16,8 @@ import type {
 } from "../lib/types.js";
 
 const MAX_REQUESTS = 20;
+const DEFAULT_MAX_CHARS_PER_ITEM = 8_000;
+const DEFAULT_MAX_TOTAL_CHARS = 60_000;
 
 const schema = {
   requests: z
@@ -30,6 +36,20 @@ const schema = {
     )
     .max(20)
     .describe("取得対象の条文リスト（最大20件）"),
+  max_chars_per_item: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(50_000)
+    .default(DEFAULT_MAX_CHARS_PER_ITEM)
+    .describe("条文ごとの最大文字数（1,000〜50,000）。省略時は8,000文字。"),
+  max_total_chars: z
+    .number()
+    .int()
+    .min(10_000)
+    .max(500_000)
+    .default(DEFAULT_MAX_TOTAL_CHARS)
+    .describe("応答全体のJSONの最大文字数（10,000〜500,000）。省略時は60,000文字。超過分の本文は省略。"),
 };
 
 const outputSchema = {
@@ -50,8 +70,18 @@ const outputSchema = {
       structured: structuredArticleSchema.optional(),
       error_message: z.string().optional(),
       revision_note: z.string().optional(),
+      truncated: z.boolean().optional(),
+      next_offset: z.number().nullable().optional(),
+      total_chars: z.number().optional(),
+      omitted: z.boolean().optional(),
+      note: z.string().optional(),
     }),
   ),
+  omitted: z.array(z.object({
+    law_name: z.string(),
+    article_number: z.string(),
+  })).optional(),
+  note: z.string().optional(),
 } satisfies z.ZodRawShape;
 
 export function registerGetLawsBatchTool(server: McpServer): void {
@@ -64,7 +94,11 @@ export function registerGetLawsBatchTool(server: McpServer): void {
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
     },
-    wrapToolHandler("get_laws_batch", async ({ requests }) => {
+    wrapToolHandler("get_laws_batch", async ({
+      requests,
+      max_chars_per_item = DEFAULT_MAX_CHARS_PER_ITEM,
+      max_total_chars = DEFAULT_MAX_TOTAL_CHARS,
+    }) => {
       if (requests.length > MAX_REQUESTS) {
         return {
           content: [
@@ -128,11 +162,25 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                 error_message: `${resolvedInfo.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
               });
             } else {
+              const truncated = JSON.stringify(structured).length > max_chars_per_item;
+              const limited = truncated ? { ...structured, paragraphs: [] } : structured;
+              if (truncated) {
+                for (const paragraph of structured.paragraphs) {
+                  const candidate = { ...limited, paragraphs: [...limited.paragraphs, paragraph] };
+                  if (JSON.stringify(candidate).length > max_chars_per_item) break;
+                  limited.paragraphs = candidate.paragraphs;
+                }
+              }
               results.push({
                 law_name: resolvedInfo.title,
                 article_number: req.article_number,
                 status: "success",
-                structured,
+                structured: limited,
+                ...(truncated ? {
+                  truncated: true,
+                  next_offset: null,
+                  note: `構造化形式は項単位で切り詰めました。全文は get_law("${resolvedInfo.title}", "${req.article_number}", format="text", offset=0) から offset で順に取得してください。`,
+                } : {}),
                 ...(fetched?.revisionNote ? { revision_note: fetched.revisionNote } : {}),
               });
             }
@@ -151,11 +199,23 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                 error_message: `${resolvedInfo.title}に${formatArticleRef(req.article_number)}が見つかりませんでした。`,
               });
             } else {
+              const page = paginateAtLineBoundary(article.text, 0, max_chars_per_item);
+              const truncated = page.next_offset !== null;
+              let text = page.text;
+              if (truncated) {
+                text += `\n\n（続きは get_law("${resolvedInfo.title}", "${req.article_number}", offset=${page.next_offset}, max_chars=${max_chars_per_item}) で取得。本文全体 ${page.total_chars} 文字）`;
+              }
+              if (fetched?.revisionNote) text += `\n\n${fetched.revisionNote}`;
               results.push({
                 law_name: resolvedInfo.title,
                 article_number: req.article_number,
                 status: "success",
-                text: fetched?.revisionNote ? `${article.text}\n\n${fetched.revisionNote}` : article.text,
+                text,
+                ...(truncated ? {
+                  truncated: true,
+                  next_offset: page.next_offset,
+                  total_chars: page.total_chars,
+                } : {}),
               });
             }
           }
@@ -174,19 +234,48 @@ export function registerGetLawsBatchTool(server: McpServer): void {
 
       const successCount = results.filter((r) => r.status === "success").length;
 
-      const response: BatchFetchResult = {
+      let response: BatchFetchResult = {
         total: results.length,
         success: successCount,
         failed: results.length - successCount,
         results,
       };
 
+      // Measure the final JSON, including omission metadata, for each prefix.
+      let text = JSON.stringify(response, null, 2);
+      if (text.length > max_total_chars) {
+        for (let keep = results.length - 1; keep >= 0; keep--) {
+          const omitted = results.slice(keep).map(({ law_name, article_number }) => ({
+            law_name, article_number,
+          }));
+          response = {
+            ...response,
+            results: results.map((item, index) => {
+              if (index < keep) return item;
+              const omittedItem = { ...item, omitted: true };
+              delete omittedItem.text;
+              delete omittedItem.structured;
+              delete omittedItem.revision_note;
+              delete omittedItem.truncated;
+              delete omittedItem.next_offset;
+              delete omittedItem.total_chars;
+              delete omittedItem.note;
+              return omittedItem;
+            }),
+            omitted,
+            note: `応答全体の上限（max_total_chars=${max_total_chars}）に達したため、次の ${omitted.length} 件は本文を省略しました。未取得: ${omitted.map((item) => `${item.law_name} ${item.article_number}`).join(", ")} 。get_law で個別に取得するか、件数を減らして再実行してください。`,
+          };
+          text = JSON.stringify(response, null, 2);
+          if (text.length <= max_total_chars) break;
+        }
+      }
+
       return {
         structuredContent: { ...response },
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(response, null, 2),
+            text,
           },
         ],
       };
