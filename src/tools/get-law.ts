@@ -1,8 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveLawId } from "../lib/law-resolver.js";
-import { getLawData } from "../lib/egov-client.js";
-import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
+import { fetchParsedArticle } from "../lib/article-fetcher.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
 import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 import {
@@ -36,6 +35,12 @@ const outputSchema = {
   format: z.enum(["text", "structured"]),
   article: z.union([parsedArticleSchema, structuredArticleSchema]),
   note: z.string().optional(),
+  revision_note: z.string().optional(),
+  revision: z.object({
+    law_revision_id: z.string(),
+    amendment_enforcement_date: z.string(),
+    current_revision_status: z.string(),
+  }).optional(),
 } satisfies z.ZodRawShape;
 
 export function registerGetLawTool(server: McpServer): void {
@@ -54,13 +59,13 @@ export function registerGetLawTool(server: McpServer): void {
         throw new LawNotFoundError(law_name);
       }
 
-      const lawData = await getLawData(resolved.law_id);
-
       if (format === "structured") {
-        const structured = parseArticleStructured(
-          lawData.law_full_text,
+        const fetched = await fetchParsedArticle(
+          resolved.law_id,
           article_number,
+          "structured",
         );
+        const structured = fetched?.article;
 
         if (!structured) {
           throw new ArticleNotFoundError(article_number, resolved.title);
@@ -71,6 +76,9 @@ export function registerGetLawTool(server: McpServer): void {
           law_num: resolved.law_num,
           source: "e-Gov法令検索",
           article: structured,
+          ...(fetched?.revision
+            ? { revision: fetched.revision, revision_note: fetched.revisionNote }
+            : {}),
         };
         if (resolved.source === "egov_search") {
           response.note =
@@ -89,7 +97,12 @@ export function registerGetLawTool(server: McpServer): void {
       }
 
       // Default: text format (backward compatible)
-      const article = parseArticle(lawData.law_full_text, article_number);
+      const fetched = await fetchParsedArticle(
+        resolved.law_id,
+        article_number,
+        "text",
+      );
+      const article = fetched?.article;
 
       if (!article) {
         throw new ArticleNotFoundError(article_number, resolved.title);
@@ -125,6 +138,7 @@ export function registerGetLawTool(server: McpServer): void {
           "※ この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",
         );
       }
+      if (fetched?.revisionNote) lines.push(fetched.revisionNote);
       const text = lines.join("\n");
 
       return {
@@ -135,6 +149,9 @@ export function registerGetLawTool(server: McpServer): void {
           source: "e-Gov法令検索",
           format: "text",
           article,
+          ...(fetched?.revision
+            ? { revision: fetched.revision, revision_note: fetched.revisionNote }
+            : {}),
           ...(resolved.source === "egov_search"
             ? {
                 note: "この法令は略称マップに登録されていないため、e-Gov法令検索から取得しました。",

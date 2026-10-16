@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock external dependencies BEFORE importing the tool module
 vi.mock("../../src/lib/egov-client.js", () => ({
+  getLawArticle: vi.fn(),
   getLawData: vi.fn(),
+  getLawRevisions: vi.fn(),
+  getLawDataByRevision: vi.fn(),
   searchLaws: vi.fn(),
 }));
-vi.mock("../../src/lib/egov-parser.js", () => ({
+vi.mock("../../src/lib/egov-parser.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-parser.js")>(),
   parseArticle: vi.fn(),
   parseArticleStructured: vi.fn(),
   parseFullLaw: vi.fn(),
@@ -15,7 +19,12 @@ vi.mock("../../src/lib/law-resolver.js", () => ({
 }));
 
 import { registerGetLawTool } from "../../src/tools/get-law.js";
-import { getLawData } from "../../src/lib/egov-client.js";
+import {
+  getLawArticle,
+  getLawData,
+  getLawRevisions,
+  getLawDataByRevision,
+} from "../../src/lib/egov-client.js";
 import {
   parseArticle,
   parseArticleStructured,
@@ -54,6 +63,50 @@ describe("get_law tool", () => {
     );
   });
 
+  it.each(["text", "structured"] as const)(
+    "returns article-not-found when elm returns null (%s)",
+    async (format) => {
+      vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+      vi.mocked(getLawArticle).mockResolvedValue(null);
+      const result = await handler({ law_name: "建築基準法", article_number: "第999条", format });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("建築基準法の第999条が見つかりません");
+      expect(getLawData).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["text", "structured"] as const)(
+    "exposes the revision metadata and unenforced note (%s)",
+    async (format) => {
+      vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+      const lawData = {
+        law_full_text: { tag: "Law", children: [] },
+        revision_info: { law_revision_id: "current", law_title: "建築基準法" },
+      };
+      const revision = {
+        law_revision_id: "future",
+        amendment_law_num: "令和八年政令第二百八十四号",
+        amendment_enforcement_date: "2026-11-01",
+        current_revision_status: "UnEnforced",
+      };
+      vi.mocked(getLawData).mockResolvedValue(lawData as any);
+      vi.mocked(getLawRevisions).mockResolvedValue({ revisions: [revision] } as any);
+      vi.mocked(getLawDataByRevision).mockResolvedValue(lawData as any);
+      const article = { article_num: "suppl", article_title: "附則", article_caption: "", text: "経過措置", paragraphs: [] };
+      const parser = format === "text" ? vi.mocked(parseArticle) : vi.mocked(parseArticleStructured);
+      parser.mockReturnValueOnce(null).mockReturnValueOnce(article);
+
+      const result = await handler({ law_name: "建築基準法", article_number: "附則（令和8年政令第284号）", format });
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toMatchObject({
+        revision: { law_revision_id: "future", amendment_enforcement_date: "2026-11-01", current_revision_status: "UnEnforced" },
+        revision_note: "※ この附則は未施行の改正（施行日 2026-11-01）の法令データから取得しました。",
+      });
+      expect(result.content[0].text).toContain(result.structuredContent.revision_note);
+      expect(getLawDataByRevision).toHaveBeenCalledWith("future");
+    },
+  );
+
   it("returns article text when found", async () => {
     const mockLawData = {
       law_full_text: { tag: "Law", children: [] },
@@ -66,7 +119,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 
     const result = await handler({
@@ -93,7 +146,7 @@ describe("get_law tool", () => {
       article: mockArticle,
     });
 
-    expect(getLawData).toHaveBeenCalledWith("325AC0000000201");
+    expect(getLawArticle).toHaveBeenCalledWith("325AC0000000201", "MainProvision-Article_20");
     expect(parseArticle).toHaveBeenCalledWith(
       mockLawData.law_full_text,
       "第20条",
@@ -112,7 +165,7 @@ describe("get_law tool", () => {
     expect(result).not.toHaveProperty("structuredContent");
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("存在しない法律");
-    expect(getLawData).not.toHaveBeenCalled();
+    expect(getLawArticle).not.toHaveBeenCalled();
   });
 
   it("returns error when article not found", async () => {
@@ -121,7 +174,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
     const result = await handler({
@@ -137,7 +190,7 @@ describe("get_law tool", () => {
 
   it("returns error on API failure", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockRejectedValue(
+    vi.mocked(getLawArticle).mockRejectedValue(
       new Error("e-Gov API returned 500"),
     );
 
@@ -172,7 +225,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticleStructured).mockReturnValue(mockStructured);
 
     const result = await handler({
@@ -226,7 +279,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 
     // No format parameter — should default to text
@@ -248,7 +301,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticleStructured).mockReturnValue(null);
 
     const result = await handler({
@@ -270,7 +323,7 @@ describe("get_law tool", () => {
         ...MOCK_RESOLVED,
         source: "egov_search",
       });
-      vi.mocked(getLawData).mockResolvedValue({
+      vi.mocked(getLawArticle).mockResolvedValue({
         law_full_text: { tag: "Law", children: [] },
       } as any);
       const article = {
@@ -324,7 +377,7 @@ describe("get_law tool", () => {
     };
 
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(mockLawData as any);
+    vi.mocked(getLawArticle).mockResolvedValue(mockLawData as any);
     vi.mocked(parseArticle).mockReturnValue(mockArticle);
 
     const result = await handler({

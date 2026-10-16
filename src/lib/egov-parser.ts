@@ -148,7 +148,7 @@ type SpecialSectionRequest =
  * Detect if the article number input is a special section request
  * (supplementary provisions or appended tables).
  */
-function detectSpecialSection(input: string): SpecialSectionRequest | null {
+export function detectSpecialSection(input: string): SpecialSectionRequest | null {
   const s = input.trim();
 
   // 別表パターン: 別表第一, 別表第1, 別表1
@@ -238,6 +238,13 @@ function normalizeArticleNumber(input: string): string | null {
 // ---------------------------------------------------------------------------
 // Helper: type guards and basic traversal
 // ---------------------------------------------------------------------------
+
+/** Build the e-Gov element selector for a main-provision article. */
+export function toArticleElm(articleNumber: string): string | null {
+  if (detectSpecialSection(articleNumber)) return null;
+  const normalized = normalizeArticleNumber(articleNumber);
+  return normalized === null ? null : `MainProvision-Article_${normalized}`;
+}
 
 function isLawNode(child: LawNode | string): child is LawNode {
   return (
@@ -805,7 +812,7 @@ function parseLawNum(s: string): ParsedLawNum | null {
  * Match two law number strings by comparing era, year, law type, and number.
  * Ignores the date portion (e.g., 六月一七日) that appears in XML AmendLawNum attributes.
  */
-function matchAmendLawNum(input: string, attrValue: string): boolean {
+export function matchAmendLawNum(input: string, attrValue: string): boolean {
   const a = parseLawNum(input);
   const b = parseLawNum(attrValue);
   if (!a || !b) return false;
@@ -823,7 +830,7 @@ function matchAmendLawNum(input: string, attrValue: string): boolean {
  * using structural comparison (era, year, law type, number) to ignore
  * date portions that appear in XML attributes.
  */
-function findAmendmentSupplProvision(
+export function findAmendmentSupplProvision(
   root: LawNode,
   amendLawNum: string,
 ): LawNode | null {
@@ -844,6 +851,13 @@ function findAmendmentSupplProvision(
       }
       return false;
     }) ?? null
+  );
+}
+
+/** List the article numbers actually included in a supplementary provision. */
+export function getSupplProvisionArticleNumbers(node: LawNode): string[] {
+  return collectArticleNodes(node).flatMap((article) =>
+    article.attr?.["Num"] ? [article.attr["Num"]] : [],
   );
 }
 

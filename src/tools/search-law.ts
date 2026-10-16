@@ -18,7 +18,7 @@ export function registerSearchLawTool(server: McpServer): void {
     "search_law",
     {
       title: "法令名検索",
-      description: "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。注意: 検索対象は法令名（タイトル）のみ。条文本文のキーワード検索は不可。条文内の用語を探す場合は get_law で条番号を直接指定するか、get_full_law で全文取得してください。",
+      description: "キーワードで建築関連法令を横断検索する。登録済みエイリアスとe-Gov APIの両方を検索する。注意: 検索対象は法令名（タイトル）のみ。条文本文のキーワード検索には search_articles を使用してください。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
     },

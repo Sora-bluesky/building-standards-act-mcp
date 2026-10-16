@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
-  getLawData: vi.fn(),
+  getLawArticle: vi.fn(),
   searchLaws: vi.fn(),
 }));
 
-vi.mock("../../src/lib/egov-parser.js", () => ({
+vi.mock("../../src/lib/egov-parser.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-parser.js")>(),
   parseArticle: vi.fn(),
   parseArticleStructured: vi.fn(),
 }));
@@ -15,7 +16,7 @@ vi.mock("../../src/lib/law-resolver.js", () => ({
 }));
 
 import { registerGetLawsBatchTool } from "../../src/tools/get-laws-batch.js";
-import { getLawData } from "../../src/lib/egov-client.js";
+import { getLawArticle } from "../../src/lib/egov-client.js";
 import {
   parseArticle,
   parseArticleStructured,
@@ -95,7 +96,7 @@ describe("get_laws_batch tool", () => {
 
   it("fetches single article successfully", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     const result = await handler({
@@ -122,7 +123,7 @@ describe("get_laws_batch tool", () => {
 
   it("fetches structured format", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(MOCK_STRUCTURED as any);
 
     const result = await handler({
@@ -138,9 +139,9 @@ describe("get_laws_batch tool", () => {
     expect(result.structuredContent).toEqual(parsed);
   });
 
-  it("groups same law requests into one API call", async () => {
+  it("resolves each law once and fetches each article individually", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     await handler({
@@ -151,8 +152,12 @@ describe("get_laws_batch tool", () => {
       ],
     });
 
-    // getLawData should only be called once for the same law
-    expect(getLawData).toHaveBeenCalledTimes(1);
+    // Resolve the law once but fetch each article separately.
+    expect(resolveLawId).toHaveBeenCalledOnce();
+    expect(getLawArticle).toHaveBeenCalledTimes(3);
+    expect(getLawArticle).toHaveBeenNthCalledWith(1, MOCK_RESOLVED.law_id, "MainProvision-Article_1");
+    expect(getLawArticle).toHaveBeenNthCalledWith(2, MOCK_RESOLVED.law_id, "MainProvision-Article_20");
+    expect(getLawArticle).toHaveBeenNthCalledWith(3, MOCK_RESOLVED.law_id, "MainProvision-Article_6");
   });
 
   it("returns law_not_found for unknown law", async () => {
@@ -171,7 +176,7 @@ describe("get_laws_batch tool", () => {
 
   it("returns article_not_found for non-existent article", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
     const result = await handler({
@@ -188,7 +193,7 @@ describe("get_laws_batch tool", () => {
     vi.mocked(resolveLawId)
       .mockResolvedValueOnce(MOCK_RESOLVED)
       .mockResolvedValueOnce(null);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle)
       .mockReturnValueOnce(MOCK_ARTICLE as any)
       .mockReturnValueOnce(null);
@@ -212,7 +217,7 @@ describe("get_laws_batch tool", () => {
 
   it("handles API error gracefully", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockRejectedValue(new Error("API timeout"));
+    vi.mocked(getLawArticle).mockRejectedValue(new Error("API timeout"));
 
     const result = await handler({
       requests: [
