@@ -3,21 +3,34 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g. v1.8.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships an older npm.
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -28,12 +41,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # No NODE_AUTH_TOKEN: the package's Trusted Publisher on npmjs.com must point at
+      # this repository and workflow file. Provenance is attached automatically.
+      # A failed publish fails the job; do not mask it with "|| echo".
       - name: Publish to npm
-        run: npm publish || echo "Already published, skipping."
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true

@@ -33,7 +33,7 @@ npm test         # vitest run
 
 ## Release Flow
 
-Tag push triggers CI (`.github/workflows/release.yml`) which runs npm publish + GitHub Release automatically.
+Tag push triggers CI (`.github/workflows/release.yml`) which runs npm publish (trusted publishing via OIDC, no token) + GitHub Release automatically. To publish an existing tag again, run the workflow manually with the `tag` input.
 
 ```
 git tag v{version} && git push origin v{version}
