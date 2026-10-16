@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
-import { findKokujiPdfUrl, searchMlitNotices } from "../lib/mlit-client.js";
+import { findKokujiCandidates, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
 import { extractTextFromPdf } from "../lib/pdf-extractor.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
@@ -46,17 +46,17 @@ interface MlitDiagnostic {
  * 1. Find the PDF URL from the MLIT Excel notice database
  * 2. Download the PDF and extract text
  *
- * Returns the text on success, or null with diagnostic info on failure.
+ * Returns the resolved notice and text, or null with diagnostic info on failure.
  */
 async function fetchViaMlit(
   title: string,
   diagnostic?: MlitDiagnostic,
-): Promise<string | null> {
-  const pdfUrl = await findKokujiPdfUrl(title);
+): Promise<{ match: KokujiMatch; text: string } | null> {
+  const [match] = await findKokujiCandidates(title, 1);
   if (diagnostic) {
-    diagnostic.pdfUrl = pdfUrl;
+    diagnostic.pdfUrl = match?.entry.pdf_url ?? null;
   }
-  if (!pdfUrl) {
+  if (!match) {
     if (diagnostic) {
       diagnostic.error = "MLIT Excel から PDF URL が見つかりませんでした";
     }
@@ -64,7 +64,8 @@ async function fetchViaMlit(
   }
 
   try {
-    return await extractTextFromPdf(pdfUrl);
+    const text = await extractTextFromPdf(match.entry.pdf_url);
+    return text ? { match, text } : null;
   } catch (err) {
     if (diagnostic) {
       diagnostic.error =
@@ -132,7 +133,7 @@ export function registerGetKokujiTool(server: McpServer): void {
             `法令番号: ${preset.law_num}`,
             `委任元: ${preset.delegated_by}`,
             "",
-            mlitText,
+            mlitText.text,
             "",
             "出典: 国土交通省 告示・通達データベース",
             "",
@@ -216,10 +217,15 @@ export function registerGetKokujiTool(server: McpServer): void {
       // Step 3: No preset — try MLIT search directly
       const mlitText = await fetchViaMlit(kokuji_name);
       if (mlitText) {
+        const { match } = mlitText;
         const text = [
-          `【検索結果】${kokuji_name}`,
+          `【検索結果】${match.entry.title}`,
+          `法令番号: ${match.entry.document_number}`,
+          ...(match.stage === "article" || match.stage === "keyword"
+            ? [`一致: ${match.matched.join("、")}`]
+            : []),
           "",
-          mlitText,
+          mlitText.text,
           "",
           "出典: 国土交通省 告示・通達データベース",
           "",
@@ -248,26 +254,35 @@ export function registerGetKokujiTool(server: McpServer): void {
       }
 
       // Nothing found anywhere — suggest similar entries from MLIT database
-      const mainKeyword = kokuji_name
-        .replace(/[のをにはでがとへもからまで等及び又は並びに]/g, "")
-        .replace(/[、。（）()「」]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w.length >= 3)
-        .slice(0, 1)[0];
-
-      const suggestions = mainKeyword
-        ? await searchMlitNotices(mainKeyword)
-        : [];
-      const suggestionLines =
-        suggestions.length > 0
-          ? [
-              "",
-              `「${mainKeyword}」を含む告示:`,
-              ...suggestions.slice(0, 5).map((s) => `  - ${s.title}`),
-              "",
-              "正式名称で再度お試しください。",
-            ]
-          : [];
+      const candidates = await findKokujiCandidates(kokuji_name, 5);
+      let suggestionLines: string[] = [];
+      if (candidates.length > 0) {
+        suggestionLines = [
+          "",
+          "関連する告示:",
+          ...candidates.map(({ entry, matched }) =>
+            `  - ${entry.title}（${entry.document_number}・一致: ${matched.join("、")}）`),
+          "",
+          "正式名称で再度お試しください。",
+        ];
+      } else {
+        const mainKeyword = kokuji_name
+          .replace(/[のをにはでがとへもからまで等及び又は並びに]/g, "")
+          .replace(/[、。（）()「」]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length >= 3)
+          .slice(0, 1)[0];
+        const suggestions = mainKeyword ? await searchMlitNotices(mainKeyword) : [];
+        if (suggestions.length > 0) {
+          suggestionLines = [
+            "",
+            `「${mainKeyword}」を含む告示:`,
+            ...suggestions.slice(0, 5).map((s) => `  - ${s.title}`),
+            "",
+            "正式名称で再度お試しください。",
+          ];
+        }
+      }
 
       const text = [
         `該当する告示を確認できませんでした: ${kokuji_name}`,

@@ -12,6 +12,7 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
 }));
 vi.mock("../../src/lib/mlit-client.js", () => ({
   findKokujiPdfUrl: vi.fn(),
+  findKokujiCandidates: vi.fn(),
   searchMlitNotices: vi.fn(),
 }));
 vi.mock("../../src/lib/pdf-extractor.js", () => ({
@@ -22,8 +23,9 @@ import { registerGetKokujiTool } from "../../src/tools/get-kokuji.js";
 import { searchLaws, getLawData } from "../../src/lib/egov-client.js";
 import { parseFullLaw } from "../../src/lib/egov-parser.js";
 import {
-  findKokujiPdfUrl,
+  findKokujiCandidates,
   searchMlitNotices,
+  type KokujiMatch,
 } from "../../src/lib/mlit-client.js";
 import { extractTextFromPdf } from "../../src/lib/pdf-extractor.js";
 import { KokujiRegistry } from "../../src/lib/kokuji-registry.js";
@@ -38,9 +40,29 @@ const mockServer = {
   }),
 };
 
+function createMatch(
+  title = "テスト告示",
+  pdfUrl = "https://www.mlit.go.jp/notice/test.pdf",
+  stage: KokujiMatch["stage"] = "exact",
+): KokujiMatch {
+  return {
+    entry: {
+      title,
+      document_number: "建設省告示第千百号",
+      date: "1981-06-01",
+      organization: "",
+      pdf_url: pdfUrl,
+    },
+    stage,
+    matched: ["第四十六条第四項"],
+    score: 5,
+  };
+}
+
 describe("get_kokuji tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findKokujiCandidates).mockReset().mockResolvedValue([]);
     registerGetKokujiTool(mockServer as any);
   });
 
@@ -70,7 +92,7 @@ describe("get_kokuji tool", () => {
       abbrev: [], delegated_by: "建築基準法", pdf_url: pdfUrl,
     };
     vi.spyOn(KokujiRegistry.prototype, "findByName").mockReturnValue(preset);
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(source === "mlit" ? pdfUrl : null);
+    vi.mocked(findKokujiCandidates).mockResolvedValue(source === "mlit" ? [createMatch(preset.title, pdfUrl)] : []);
     const body = "告示本文".repeat(375);
     vi.mocked(extractTextFromPdf).mockImplementation(async () => {
       if (source === "egov") throw new Error("PDF unavailable");
@@ -101,7 +123,7 @@ describe("get_kokuji tool", () => {
     const mockPdfUrl = "https://www.mlit.go.jp/notice/test.pdf";
     const mockPdfText = "耐火構造の構造方法は、次に定めるものとする。";
 
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(mockPdfUrl);
+    vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch("耐火構造の構造方法を定める件", mockPdfUrl)]);
     vi.mocked(extractTextFromPdf).mockResolvedValue(mockPdfText);
 
     const result = await handler({
@@ -113,13 +135,15 @@ describe("get_kokuji tool", () => {
     // No presets — goes through dynamic MLIT search (Step 3)
     expect(result.content[0].text).toContain("【検索結果】");
     expect(result.content[0].text).toContain("耐火構造の構造方法を定める件");
+    expect(result.content[0].text).toContain("法令番号: 建設省告示第千百号");
+    expect(result.content[0].text).not.toContain("一致:");
     expect(result.content[0].text).toContain(mockPdfText);
     expect(result.content[0].text).toContain("出典: 国土交通省");
   });
 
   it("falls back to e-Gov when MLIT fails", async () => {
     // MLIT pipeline fails
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(null);
+    vi.mocked(findKokujiCandidates).mockResolvedValue([]);
 
     // e-Gov returns a result
     const mockSearchResult = {
@@ -208,7 +232,7 @@ describe("get_kokuji tool", () => {
     const mockPdfUrl = "https://www.mlit.go.jp/notice/other.pdf";
     const mockPdfText = "この告示は検索で見つかりました。";
 
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(mockPdfUrl);
+    vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch("検索で解決した告示", mockPdfUrl)]);
     vi.mocked(extractTextFromPdf).mockResolvedValue(mockPdfText);
 
     const result = await handler({
@@ -218,12 +242,14 @@ describe("get_kokuji tool", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].type).toBe("text");
     expect(result.content[0].text).toContain("【検索結果】");
+    expect(result.content[0].text).toContain("【検索結果】検索で解決した告示");
+    expect(result.content[0].text).toContain("法令番号: 建設省告示第千百号");
     expect(result.content[0].text).toContain(mockPdfText);
   });
 
   it("returns guidance when nothing found anywhere", async () => {
     // MLIT pipeline fails
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue(null);
+    vi.mocked(findKokujiCandidates).mockResolvedValue([]);
 
     // e-Gov returns nothing
     const emptySearchResult = {
@@ -252,11 +278,11 @@ describe("get_kokuji tool", () => {
   });
 
   it("paginates MLIT text including headers and continues at offset", async () => {
-    vi.mocked(findKokujiPdfUrl).mockResolvedValue("https://www.mlit.go.jp/notice/test.pdf");
+    vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch()]);
     const body = "告示本文".repeat(375);
     vi.mocked(extractTextFromPdf).mockResolvedValue(body);
     const complete = [
-      "【検索結果】テスト告示", "", body, "",
+      "【検索結果】テスト告示", "法令番号: 建設省告示第千百号", "", body, "",
       "出典: 国土交通省 告示・通達データベース", "",
       "※ この告示はプリセットに含まれていないため、",
       "国土交通省の告示データベースから検索して取得しました。",
@@ -271,7 +297,7 @@ describe("get_kokuji tool", () => {
   });
 
   it("returns error on unexpected exception", async () => {
-    vi.mocked(findKokujiPdfUrl).mockRejectedValue(
+    vi.mocked(findKokujiCandidates).mockRejectedValue(
       new Error("Unexpected network error"),
     );
 
@@ -284,5 +310,48 @@ describe("get_kokuji tool", () => {
     // Sanitized: internal error details are hidden from client
     expect(result.content[0].text).not.toContain("Unexpected network error");
     expect(result.content[0].text).toContain("内部エラー");
+  });
+
+  it.each(["article", "keyword"] as const)("shows the resolved notice and matched terms for the %s stage", async (stage) => {
+    const match = createMatch("建築基準法施行令第四十六条第四項の基準", undefined, stage);
+    match.matched.push("軸組");
+    vi.mocked(findKokujiCandidates).mockResolvedValue([match]);
+    vi.mocked(extractTextFromPdf).mockResolvedValue("告示本文です。");
+
+    const result = await handler({ kokuji_name: "壁量" });
+
+    expect(findKokujiCandidates).toHaveBeenCalledWith("壁量", 1);
+    expect(result.content[0].text).toContain([
+      `【検索結果】${match.entry.title}`,
+      `法令番号: ${match.entry.document_number}`,
+      "一致: 第四十六条第四項、軸組",
+      "",
+      "告示本文です。",
+    ].join("\n"));
+    expect(extractTextFromPdf).toHaveBeenCalledWith(match.entry.pdf_url);
+  });
+
+  it("returns not-found guidance with candidate suggestions and matched references", async () => {
+    const match = createMatch("軸組の基準を定める件", undefined, "article");
+    vi.mocked(findKokujiCandidates).mockResolvedValue([match]);
+    vi.mocked(extractTextFromPdf).mockRejectedValue(new Error("PDF unavailable"));
+    vi.mocked(searchLaws).mockResolvedValue({ total_count: 0, count: 0, laws: [] });
+
+    const result = await handler({ kokuji_name: "壁量" });
+
+    expect(result.content[0].text).toContain("該当する告示を確認できませんでした");
+    expect(result.content[0].text).toContain("  - 軸組の基準を定める件（建設省告示第千百号・一致: 第四十六条第四項）");
+    expect(findKokujiCandidates).toHaveBeenCalledWith("壁量", 5);
+    expect(searchMlitNotices).not.toHaveBeenCalled();
+  });
+
+  it("uses the existing keyword suggestion only when there are no candidates", async () => {
+    vi.mocked(searchLaws).mockResolvedValue({ total_count: 0, count: 0, laws: [] });
+    vi.mocked(searchMlitNotices).mockResolvedValue([createMatch("構造に関する告示").entry]);
+
+    const result = await handler({ kokuji_name: "構造規定" });
+
+    expect(result.content[0].text).toContain("  - 構造に関する告示");
+    expect(searchMlitNotices).toHaveBeenCalledWith("構造規定");
   });
 });

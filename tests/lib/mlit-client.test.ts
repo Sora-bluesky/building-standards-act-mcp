@@ -167,6 +167,178 @@ describe("mlit-client", () => {
     });
   });
 
+  describe("findKokujiCandidates — article reference and alias matching", () => {
+    let findCandidates: typeof import("../../src/lib/mlit-client.js").findKokujiCandidates;
+    const wallTitle = "建築基準法施行令第四十六条第四項表一（一）項から（七）項までに掲げる軸組と同等以上の耐力を有する軸組及び当該軸組に係る倍率の数値";
+    const rows = [
+      ["Header", "", "", "", "", ""],
+      ["道路法第四十六条第三項並びに道路法施行令第十九条の十二及び第十九条の十三の規定に基づく危険物を積載する車両の水底トンネルの通行の禁止又は制限", "関東地方整備局告示第三百四十五号", "2020-01-01", "", "", "https://example.com/345.pdf"],
+      ["建築基準法施行令第四十六条第二項第一号ハ等の規定に基づく木造若しくは鉄骨造の建築物又は建築物の構造部分が構造耐力上安全であることを確かめるための構造計算の基準", "建設省告示第千八百九十九号", "2000-01-01", "", "", "https://example.com/1899.pdf"],
+      ["木造建築物等の外壁の延焼のおそれのある部分の構造方法を定める件", "建設省告示第千三百六十二号", "2000-01-01", "", "", "https://example.com/1362.pdf"],
+      ["木造建築物の軸組の設置の基準を定める件", "建設省告示第千三百五十二号", "2000-01-01", "", "", "https://example.com/1352.pdf"],
+      ["構造耐力上主要な部分である床版又は屋根版に軽量気泡コンクリートパネルを用いる場合における当該床版又は屋根版の構造方法に関する安全上必要な技術的基準を定める件", "国土交通省告示第五百九十九号", "2010-01-01", "", "", "https://example.com/599.pdf"],
+      [wallTitle, "建設省告示第千百号", "1981-06-01", "", "", "https://example.com/1100.pdf"],
+    ];
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.stubGlobal("fetch", mockFetch);
+      await setupHappyPath(MOCK_NOTICE_HTML, rows);
+      ({ findKokujiCandidates: findCandidates } = await import("../../src/lib/mlit-client.js"));
+    });
+
+    it("resolves the wall-quantity alias through the existing URL API", async () => {
+      const { findKokujiPdfUrl: findUrl } = await import("../../src/lib/mlit-client.js");
+      expect(await findUrl("壁量")).toBe("https://example.com/1100.pdf");
+    });
+
+    it.each([
+      "壁量", "必要壁量", "壁量計算", "壁量基準", "存在壁量",
+      "令46条4項", "木造建築物の壁量", "令４６条４項",
+    ])("ranks Notice 1100 first for %s", async (query) => {
+      const matches = await findCandidates(query);
+      expect(matches[0].entry.document_number).toBe("建設省告示第千百号");
+      expect(matches[0].stage).toBe("article");
+      expect(matches[0].matched).toContain("第四十六条第四項");
+      expect(matches.every((match) => match.stage === "article")).toBe(true);
+      expect(matches.some((match) => match.entry.pdf_url.endsWith("1899.pdf"))).toBe(false);
+    });
+
+    it("keeps the earlier partial stage for a verbatim kanji reference", async () => {
+      const [match] = await findCandidates("令第四十六条第四項");
+      expect(match.entry.document_number).toBe("建設省告示第千百号");
+      expect(match.stage).toBe("partial");
+    });
+
+    it("keeps an explicit different law when selecting references", async () => {
+      const matches = await findCandidates("道路法第46条第3項");
+      expect(matches[0].entry.document_number).toBe("関東地方整備局告示第三百四十五号");
+      expect(matches[0].stage).toBe("article");
+      expect(matches[0].matched).toContain("第四十六条第三項");
+    });
+
+    it("rejects a different law even when its article and paragraph are identical", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        ["道路法第四十六条第四項の基準", "別法告示", "2026-01-01", "", "", "https://example.com/other-law.pdf"],
+      ]);
+      const matches = await findCandidates("令46条4項");
+      expect(matches.map((match) => match.entry.document_number)).toEqual(["建設省告示第千百号"]);
+    });
+
+    it("prefers a named law and specific paragraph over a bare or article-only reference", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        ["第四十六条第四項の基準", "法令名なし", "2026-01-01", "", "", "https://example.com/bare.pdf"],
+        ["建築基準法施行令第四十六条の基準", "条のみ", "2026-01-01", "", "", "https://example.com/article.pdf"],
+      ]);
+      const matches = await findCandidates("令46条4項");
+      expect(matches[0].entry.title).toBe(wallTitle);
+      expect(matches.find((match) => match.entry.document_number === "条のみ")?.matched)
+        .toEqual(["第四十六条"]);
+    });
+
+    it("scores extra query keywords only after removing article references", async () => {
+      const [match] = await findCandidates("令46条4項の軸組");
+      expect(match.matched).toEqual(["第四十六条第四項", "軸組"]);
+      expect(match.score).toBe(6);
+    });
+
+    it("scores only the longest available form for each query reference", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        rows[0],
+        ["建築基準法施行令第四十六条及び第四十六条第四項の基準", "併記告示", "2000-01-01", "", "", "https://example.com/repeated.pdf"],
+      ]);
+      const [match] = await findCandidates("令46条4項");
+      expect(match.matched).toEqual(["第四十六条第四項"]);
+      expect(match.score).toBe(5);
+    });
+
+    it("distinguishes article branches and items while allowing a less specific title", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        rows[0],
+        ["建築基準法施行令第百三十六条の二の十一第二号の基準", "異なる号", "2026-01-01", "", "", "https://example.com/wrong-item.pdf"],
+        ["建築基準法施行令第百三十六条の二第一号の基準", "異なる枝番", "2026-01-01", "", "", "https://example.com/wrong-branch.pdf"],
+        ["建築基準法施行令第百三十六条の二の十一の基準", "条のみ", "2026-01-01", "", "", "https://example.com/article-only.pdf"],
+        ["建築基準法施行令第百三十六条の二の十一第一号の基準", "正しい号", "2000-01-01", "", "", "https://example.com/item.pdf"],
+      ]);
+      const matches = await findCandidates("令第136条の2の11第1号");
+      expect(matches.map((match) => match.entry.document_number)).toEqual(["正しい号", "条のみ"]);
+      expect(matches[0].matched).toEqual(["第百三十六条の二の十一第一号"]);
+    });
+
+    it("expands the column-dimension alias through the same article stage", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        ["建築基準法施行令第四十三条第一項の基準", "柱の基準告示", "2000-01-01", "", "", "https://example.com/columns.pdf"],
+      ]);
+      const [match] = await findCandidates("柱の小径");
+      expect(match.entry.document_number).toBe("柱の基準告示");
+      expect(match.stage).toBe("article");
+      expect(match.matched).toContain("第四十三条第一項");
+    });
+
+    it("breaks article-score ties by newer date", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        [wallTitle + "の改正", "新しい告示", "2026-01-01", "", "", "https://example.com/new.pdf"],
+      ]);
+      expect((await findCandidates("令46条4項"))[0].entry.document_number).toBe("新しい告示");
+    });
+
+    it("does not select the ALC panel notice from generic structural keywords", async () => {
+      const matches = await findCandidates("構造耐力上必要な軸組等");
+      expect(matches.every((match) => match.stage !== "article")).toBe(true);
+      expect(matches.some((match) => match.entry.document_number === "国土交通省告示第五百九十九号"))
+        .toBe(false);
+    });
+
+    it("keeps fuzzy matching for allowable-stress calculation titles", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        ["許容応力度等計算の基準を定める件", "計算告示", "2000-01-01", "", "", "https://example.com/stress.pdf"],
+      ]);
+      const [match] = await findCandidates("許容応力度計算等の基準");
+      expect(match.entry.document_number).toBe("計算告示");
+      expect(match.stage).toBe("keyword");
+      expect(match.score).toBeCloseTo(0.7);
+      expect(match.matched).toContain("基準");
+    });
+
+    it("counts overlapping chunks once and enforces the 0.6 coverage threshold", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        rows[0],
+        ["甲乙丙丁戊及び軸組", "低い一致率", "2000-01-01", "", "", "https://example.com/low.pdf"],
+      ]);
+      expect(await findCandidates("甲乙丙丁戊己庚辛壬癸の軸組")).toEqual([]);
+      // Five matched characters out of ten remain below the threshold even with three overlapping chunks.
+      expect(await findCandidates("甲乙丙丁戊己庚辛壬癸")).toEqual([]);
+    });
+
+    it("accepts two-character runs at the threshold and sorts by title length then date", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        rows[0],
+        ["甲乙丙丁及び軸組の長い基準", "長い題名", "2026-01-01", "", "", "https://example.com/long.pdf"],
+        ["甲乙丙丁及び軸組", "古い告示", "2000-01-01", "", "", "https://example.com/old.pdf"],
+        ["甲乙丙丁及び軸組", "新しい告示", "2020-01-01", "", "", "https://example.com/new.pdf"],
+      ]);
+      const matches = await findCandidates("甲乙丙丁戊己庚辛の軸組");
+      expect(matches.map((match) => match.entry.document_number))
+        .toEqual(["新しい告示", "古い告示", "長い題名"]);
+      expect(matches.every((match) => match.score === 0.6)).toBe(true);
+    });
+
+    it("returns only the first successful stage and respects the result limit", async () => {
+      expect((await findCandidates(wallTitle))[0].stage).toBe("exact");
+      const matches = await findCandidates("木造建築物", 1);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].stage).toBe("partial");
+      expect(matches[0].entry.document_number).toBe("建設省告示第千三百六十二号");
+      expect(await findCandidates("", 5)).toEqual([]);
+      expect(await findCandidates("壁量", 0)).toEqual([]);
+    });
+  });
+
   describe("findKokujiPdfUrl — failure cases (fresh module)", () => {
     it("returns null when notice page fetch fails (network error)", async () => {
       vi.resetModules();

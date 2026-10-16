@@ -1,4 +1,6 @@
 import JSZip from "jszip";
+import { expandKokujiAliases } from "../data/kokuji-term-aliases.js";
+import { formatArticleRef, parseArticleRefs, type ArticleRef } from "./article-ref.js";
 import { createCache } from "./cache.js";
 import { SERVER_VERSION } from "./version.js";
 
@@ -18,6 +20,15 @@ export interface MlitNoticeEntry {
   date: string;
   organization: string;
   pdf_url: string;
+}
+
+export type KokujiMatchStage = "exact" | "partial" | "article" | "keyword";
+
+export interface KokujiMatch {
+  entry: MlitNoticeEntry;
+  stage: KokujiMatchStage;
+  matched: string[];
+  score: number;
 }
 
 // Column indices in the Excel spreadsheet (0-based)
@@ -342,78 +353,130 @@ async function getAllEntries(): Promise<MlitNoticeEntry[]> {
   return entries;
 }
 
-/**
- * Extract meaningful keywords from a kokuji title for fuzzy matching.
- * Extracts runs of kanji (3+ chars), then splits long runs into
- * overlapping 3-character chunks to handle word boundary differences
- * (e.g. "許容応力度計算等" → ["許容応", "応力度", "力度計", "度計算"]).
- */
-function extractKeywords(title: string): string[] {
-  const kanjiRuns = title.match(/[\u4E00-\u9FFF]{3,}/g) ?? [];
-
-  const chunks: string[] = [];
-  for (const run of kanjiRuns) {
-    if (run.length <= 4) {
-      chunks.push(run);
-    } else {
-      // Sliding window of 3 characters
-      for (let i = 0; i <= run.length - 3; i++) {
-        chunks.push(run.substring(i, i + 3));
-      }
-    }
-  }
-
-  return [...new Set(chunks)];
+function kanjiRuns(text: string): string[] {
+  return text.match(/[\u4E00-\u9FFF]{2,}/g) ?? [];
 }
 
-/**
- * Search for a kokuji (ministerial notification) in the MLIT notice database
- * and return its PDF URL. Uses three-stage matching:
- * 1. Exact match
- * 2. Partial match (includes)
- * 3. Keyword match (all extracted keywords must appear in the entry title)
- *
- * @param title - The kokuji title to search for
- * @returns The PDF URL if found, null otherwise
- */
-export async function findKokujiPdfUrl(title: string): Promise<string | null> {
-  const entries = await getAllEntries();
-
-  // Stage 1: exact match
-  const exact = entries.find((e) => e.title === title);
-  if (exact) {
-    return exact.pdf_url;
+function withoutRefs(text: string, refs: ArticleRef[]): string {
+  let result = "";
+  let end = 0;
+  for (const ref of refs) {
+    result += text.slice(end, ref.start) + " ";
+    end = ref.end;
   }
+  return result + text.slice(end);
+}
 
-  // Stage 2: partial match (title includes search term or vice versa)
-  const partial = entries.find(
-    (e) => e.title.includes(title) || title.includes(e.title),
-  );
-  if (partial) {
-    return partial.pdf_url;
-  }
+function articleBase(ref: ArticleRef): string {
+  return formatArticleRef({ ...ref, paragraph: undefined, item: undefined });
+}
 
-  // Stage 3: keyword match — find entry with highest keyword overlap
-  const keywords = extractKeywords(title);
-  if (keywords.length >= 2) {
-    const threshold = Math.ceil(keywords.length * 0.5); // at least 50% match
-    let bestMatch: MlitNoticeEntry | null = null;
-    let bestScore = 0;
+/** Match the most specific available provision, rejecting conflicting law/paragraph/item references. */
+function matchArticleRef(ref: ArticleRef, titleRef: ArticleRef): string | null {
+  if (articleBase(ref) !== articleBase(titleRef)) return null;
+  if (ref.law && titleRef.law && ref.law !== titleRef.law) return null;
+  if (ref.paragraph && titleRef.paragraph
+    && formatArticleRef({ ...ref, item: undefined })
+      !== formatArticleRef({ ...titleRef, item: undefined })) return null;
+  if (ref.item && titleRef.item
+    && formatArticleRef({ ...ref, paragraph: undefined })
+      !== formatArticleRef({ ...titleRef, paragraph: undefined })) return null;
 
-    for (const entry of entries) {
-      const score = keywords.filter((kw) => entry.title.includes(kw)).length;
-      if (score >= threshold && score > bestScore) {
-        bestScore = score;
-        bestMatch = entry;
+  return formatArticleRef({
+    ...ref,
+    paragraph: titleRef.paragraph ? ref.paragraph : undefined,
+    item: titleRef.item ? ref.item : undefined,
+  });
+}
+
+function articleMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[] {
+  const expanded = expandKokujiAliases(query);
+  const refs = parseArticleRefs(expanded);
+  if (refs.length === 0) return [];
+  const keywords = [...new Set(kanjiRuns(withoutRefs(expanded, refs)))];
+  const matches: KokujiMatch[] = [];
+  for (const entry of entries) {
+    const titleRefs = parseArticleRefs(entry.title);
+    const matchedRefs = new Map<string, number>();
+    for (const ref of refs) {
+      let best: { matched: string; score: number } | undefined;
+      for (const titleRef of titleRefs) {
+        const matched = matchArticleRef(ref, titleRef);
+        if (!matched) continue;
+        const specificity = 1 + (matched.includes("項") ? 1 : 0) + (matched.includes("号") ? 1 : 0);
+        const score = specificity + (ref.law && entry.title.includes(ref.law) ? 3 : 0);
+        if (!best || score > best.score) best = { matched, score };
       }
+      if (best) matchedRefs.set(best.matched, Math.max(matchedRefs.get(best.matched) ?? 0, best.score));
     }
+    if (matchedRefs.size === 0) continue;
+    const matchedKeywords = keywords.filter((keyword) => entry.title.includes(keyword));
+    matches.push({
+      entry,
+      stage: "article",
+      matched: [...matchedRefs.keys(), ...matchedKeywords],
+      score: [...matchedRefs.values()].reduce((sum, score) => sum + score, 0) + matchedKeywords.length,
+    });
+  }
+  return matches.sort((a, b) => b.score - a.score || b.entry.date.localeCompare(a.entry.date));
+}
 
-    if (bestMatch) {
-      return bestMatch.pdf_url;
+/** Require coverage of every kanji run; overlapping chunks count each character only once. */
+function keywordMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[] {
+  const runs = kanjiRuns(query);
+  const totalChars = query.match(/[\u4E00-\u9FFF]/g)?.length ?? 0;
+  if (runs.length === 0) return [];
+  const matches: KokujiMatch[] = [];
+  for (const entry of entries) {
+    const matched = new Set<string>();
+    let matchedChars = 0;
+    let allRunsCovered = true;
+    for (const run of runs) {
+      const covered = new Set<number>();
+      const chunkSize = run.length <= 4 ? run.length : 3;
+      for (let i = 0; i <= run.length - chunkSize; i++) {
+        const chunk = run.slice(i, i + chunkSize);
+        if (!entry.title.includes(chunk)) continue;
+        matched.add(chunk);
+        for (let j = i; j < i + chunkSize; j++) covered.add(j);
+      }
+      if (covered.size === 0) {
+        allRunsCovered = false;
+        break;
+      }
+      matchedChars += covered.size;
+    }
+    const score = matchedChars / totalChars;
+    if (allRunsCovered && score >= 0.6) {
+      matches.push({ entry, stage: "keyword", matched: [...matched], score });
     }
   }
+  return matches.sort((a, b) => b.score - a.score
+    || a.entry.title.length - b.entry.title.length
+    || b.entry.date.localeCompare(a.entry.date));
+}
 
-  return null;
+/** Return candidates from the first successful stage, preserving exact/partial ordering. */
+export async function findKokujiCandidates(title: string, limit = 5): Promise<KokujiMatch[]> {
+  if (!title.trim() || limit <= 0) return [];
+  const entries = await getAllEntries();
+  const exact = entries.filter((entry) => entry.title === title);
+  if (exact.length > 0) {
+    return exact.slice(0, limit).map((entry) => ({ entry, stage: "exact", matched: [title], score: 1 }));
+  }
+  const partial = entries.filter((entry) => entry.title.includes(title) || title.includes(entry.title));
+  if (partial.length > 0) {
+    return partial.slice(0, limit).map((entry) => ({
+      entry, stage: "partial", matched: [title.includes(entry.title) ? entry.title : title], score: 1,
+    }));
+  }
+  const articles = articleMatches(entries, title);
+  return (articles.length > 0 ? articles : keywordMatches(entries, title)).slice(0, limit);
+}
+
+/** Keep the existing URL API backed by the same candidate selection. */
+export async function findKokujiPdfUrl(title: string): Promise<string | null> {
+  return (await findKokujiCandidates(title, 1))[0]?.entry.pdf_url ?? null;
 }
 
 /**
