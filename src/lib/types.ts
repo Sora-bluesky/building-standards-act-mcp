@@ -76,6 +76,7 @@ export interface LawUpdateCheckResult {
   title: string;
   law_id: string;
   status: "current" | "has_revisions" | "repealed" | "error";
+  since?: string;
   latest_amendment_date?: string;
   latest_amendment_law?: string;
   revisions?: EgovRevisionInfo[];

@@ -14,6 +14,51 @@ import {
 } from "./errors.js";
 import { EgovApiError } from "./errors.js";
 
+export const DEFAULT_MAX_CHARS = 100_000;
+
+/** Paginate UTF-16 text without cutting a surrogate pair. */
+export function paginateText(
+  text: string,
+  offset: number,
+  maxChars: number,
+): {
+  text: string;
+  total_chars: number;
+  offset: number;
+  next_offset: number | null;
+} {
+  const total_chars = text.length;
+  if (offset >= total_chars && total_chars > 0) {
+    return {
+      text: `指定された offset=${offset} は本文の末尾以降です（全体 ${total_chars} 文字）。`,
+      total_chars,
+      offset,
+      next_offset: null,
+    };
+  }
+
+  const splitsSurrogatePair = (index: number): boolean => {
+    const previous = text.charCodeAt(index - 1);
+    const current = text.charCodeAt(index);
+    return (
+      previous >= 0xd800 && previous <= 0xdbff &&
+      current >= 0xdc00 && current <= 0xdfff
+    );
+  };
+  if (splitsSurrogatePair(offset)) offset--;
+  let end = Math.min(offset + maxChars, total_chars);
+  if (splitsSurrogatePair(end)) {
+    // A one-unit page must still advance past a complete pair.
+    end += end - offset === 1 ? 1 : -1;
+  }
+
+  const next_offset = end < total_chars ? end : null;
+  const note = next_offset === null
+    ? ""
+    : `\n\n（続きがあります。offset=${next_offset} を指定して続きを取得してください。全体 ${total_chars} 文字）`;
+  return { text: text.slice(offset, end) + note, total_chars, offset, next_offset };
+}
+
 export const TOOL_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,

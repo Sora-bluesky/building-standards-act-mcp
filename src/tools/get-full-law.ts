@@ -4,7 +4,12 @@ import { resolveLawId } from "../lib/law-resolver.js";
 import { getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import { LawNotFoundError } from "../lib/errors.js";
-import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import {
+  DEFAULT_MAX_CHARS,
+  paginateText,
+  TOOL_ANNOTATIONS,
+  wrapToolHandler,
+} from "../lib/tool-helpers.js";
 
 const schema = {
   law_name: z
@@ -13,6 +18,19 @@ const schema = {
     .describe(
       "法令名（正式名称、略称のいずれか。例: 建築基準法施行令、建基令）",
     ),
+  max_chars: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(500_000)
+    .default(DEFAULT_MAX_CHARS)
+    .describe("1回に取得する最大文字数（1,000〜500,000）。省略時は100,000文字。"),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .default(0)
+    .describe("取得開始位置（0から始まる文字位置）。続きの取得時は案内された offset を指定。"),
 };
 
 export function registerGetFullLawTool(server: McpServer): void {
@@ -24,7 +42,9 @@ export function registerGetFullLawTool(server: McpServer): void {
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
     },
-    wrapToolHandler("get_full_law", async ({ law_name }) => {
+    wrapToolHandler("get_full_law", async ({
+      law_name, max_chars = DEFAULT_MAX_CHARS, offset = 0,
+    }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {
         throw new LawNotFoundError(law_name);
@@ -48,7 +68,9 @@ export function registerGetFullLawTool(server: McpServer): void {
       }
       const text = lines.join("\n");
 
-      return { content: [{ type: "text" as const, text }] };
+      return {
+        content: [{ type: "text" as const, text: paginateText(text, offset, max_chars).text }],
+      };
     }),
   );
 }
