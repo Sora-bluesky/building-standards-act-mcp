@@ -252,6 +252,34 @@ describe("egov-client", () => {
   });
 
   describe("searchKeyword", () => {
+    it.each([0, 1])("normalizes and caches a missing next_offset with %i hits", async (totalCount) => {
+      const response = {
+        total_count: totalCount,
+        sentence_count: totalCount,
+        items: totalCount === 0 ? [] : [{ sentences: [{ text: "三百平方メートル" }] }],
+      };
+      mockFetch.mockResolvedValueOnce(createMockResponse(response));
+      const params = { keyword: `missing-next-offset-${totalCount}`, limit: 8, offset: 0 };
+
+      const result = await searchKeyword(params);
+      const cached = await searchKeyword(params);
+
+      expect(result.next_offset).toBe(null);
+      expect(result).toEqual({ ...response, next_offset: null });
+      expect(cached).toBe(result);
+      expect(cached.next_offset).toBe(null);
+      expect(mockFetch).toHaveBeenCalledOnce();
+    });
+
+    it.each([0, 8])("preserves a numeric next_offset of %i", async (nextOffset) => {
+      const response = { total_count: 10, sentence_count: 0, next_offset: nextOffset, items: [] };
+      mockFetch.mockResolvedValueOnce(createMockResponse(response));
+
+      const result = await searchKeyword({ keyword: `numeric-next-offset-${nextOffset}`, limit: 8, offset: 0 });
+
+      expect(result.next_offset).toBe(nextOffset);
+    });
+
     it("builds the keyword query with law_num and caches by the complete query", async () => {
       const response = { total_count: 0, sentence_count: 0, next_offset: null, items: [] };
       mockFetch.mockResolvedValue(createMockResponse(response));

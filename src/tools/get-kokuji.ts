@@ -2,8 +2,9 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
-import { findKokujiPdfUrl, searchMlitNotices } from "../lib/mlit-client.js";
-import { extractTextFromPdf } from "../lib/pdf-extractor.js";
+import { findKokujiCandidates, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
+import { extractPdfText, type PdfTextResult } from "../lib/pdf-extractor.js";
+import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import {
@@ -41,22 +42,41 @@ interface MlitDiagnostic {
   error: string | null;
 }
 
+/** Describe the PDF's evidence of currency without treating HTTP metadata as proof. */
+function pdfCurrencyLines(pdf: PdfTextResult): string[] {
+  const latestAmendment = extractLatestAmendment(pdf.text);
+  const lines: string[] = [];
+  if (latestAmendment) {
+    lines.push(`※ 国交省 DB の PDF に記載された最終改正: ${latestAmendment}`);
+  }
+  if (pdf.lastModified) {
+    lines.push(`※ 国交省 DB の PDF 更新日: ${pdf.lastModified}`);
+  }
+  if (lines.length === 0) {
+    return ["※ 国交省 DB の PDF の収録時点は確認できませんでした。最新の改正は e-Gov 法令検索または官報で確認してください。"];
+  }
+  return [
+    ...lines,
+    "これより後の改正は反映されていない可能性があります。最新の改正は e-Gov 法令検索または官報で確認してください。",
+  ];
+}
+
 /**
  * Attempt to fetch kokuji text via the MLIT pipeline:
  * 1. Find the PDF URL from the MLIT Excel notice database
  * 2. Download the PDF and extract text
  *
- * Returns the text on success, or null with diagnostic info on failure.
+ * Returns the resolved notice and text, or null with diagnostic info on failure.
  */
 async function fetchViaMlit(
   title: string,
   diagnostic?: MlitDiagnostic,
-): Promise<string | null> {
-  const pdfUrl = await findKokujiPdfUrl(title);
+): Promise<(PdfTextResult & { match: KokujiMatch }) | null> {
+  const [match] = await findKokujiCandidates(title, 1);
   if (diagnostic) {
-    diagnostic.pdfUrl = pdfUrl;
+    diagnostic.pdfUrl = match?.entry.pdf_url ?? null;
   }
-  if (!pdfUrl) {
+  if (!match) {
     if (diagnostic) {
       diagnostic.error = "MLIT Excel から PDF URL が見つかりませんでした";
     }
@@ -64,7 +84,8 @@ async function fetchViaMlit(
   }
 
   try {
-    return await extractTextFromPdf(pdfUrl);
+    const pdf = await extractPdfText(match.entry.pdf_url);
+    return pdf.text ? { match, ...pdf } : null;
   } catch (err) {
     if (diagnostic) {
       diagnostic.error =
@@ -132,7 +153,9 @@ export function registerGetKokujiTool(server: McpServer): void {
             `法令番号: ${preset.law_num}`,
             `委任元: ${preset.delegated_by}`,
             "",
-            mlitText,
+            mlitText.text,
+            "",
+            ...pdfCurrencyLines(mlitText),
             "",
             "出典: 国土交通省 告示・通達データベース",
             "",
@@ -147,13 +170,15 @@ export function registerGetKokujiTool(server: McpServer): void {
         // Step 2b: MLIT failed — try preset pdf_url if available
         if (preset.pdf_url) {
           try {
-            const pdfText = await extractTextFromPdf(preset.pdf_url);
+            const pdfText = await extractPdfText(preset.pdf_url);
             const text = [
               `【告示】${preset.title}`,
               `法令番号: ${preset.law_num}`,
               `委任元: ${preset.delegated_by}`,
               "",
-              pdfText,
+              pdfText.text,
+              "",
+              ...pdfCurrencyLines(pdfText),
               "",
               `出典: 国土交通省（PDF直接取得）`,
               `URL: ${preset.pdf_url}`,
@@ -216,10 +241,17 @@ export function registerGetKokujiTool(server: McpServer): void {
       // Step 3: No preset — try MLIT search directly
       const mlitText = await fetchViaMlit(kokuji_name);
       if (mlitText) {
+        const { match } = mlitText;
         const text = [
-          `【検索結果】${kokuji_name}`,
+          `【検索結果】${match.entry.title}`,
+          `法令番号: ${match.entry.document_number}`,
+          ...(match.stage === "article" || match.stage === "keyword"
+            ? [`一致: ${match.matched.join("、")}`]
+            : []),
           "",
-          mlitText,
+          mlitText.text,
+          "",
+          ...pdfCurrencyLines(mlitText),
           "",
           "出典: 国土交通省 告示・通達データベース",
           "",
@@ -248,26 +280,35 @@ export function registerGetKokujiTool(server: McpServer): void {
       }
 
       // Nothing found anywhere — suggest similar entries from MLIT database
-      const mainKeyword = kokuji_name
-        .replace(/[のをにはでがとへもからまで等及び又は並びに]/g, "")
-        .replace(/[、。（）()「」]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w.length >= 3)
-        .slice(0, 1)[0];
-
-      const suggestions = mainKeyword
-        ? await searchMlitNotices(mainKeyword)
-        : [];
-      const suggestionLines =
-        suggestions.length > 0
-          ? [
-              "",
-              `「${mainKeyword}」を含む告示:`,
-              ...suggestions.slice(0, 5).map((s) => `  - ${s.title}`),
-              "",
-              "正式名称で再度お試しください。",
-            ]
-          : [];
+      const candidates = await findKokujiCandidates(kokuji_name, 5);
+      let suggestionLines: string[] = [];
+      if (candidates.length > 0) {
+        suggestionLines = [
+          "",
+          "関連する告示:",
+          ...candidates.map(({ entry, matched }) =>
+            `  - ${entry.title}（${entry.document_number}・一致: ${matched.join("、")}）`),
+          "",
+          "正式名称で再度お試しください。",
+        ];
+      } else {
+        const mainKeyword = kokuji_name
+          .replace(/[のをにはでがとへもからまで等及び又は並びに]/g, "")
+          .replace(/[、。（）()「」]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length >= 3)
+          .slice(0, 1)[0];
+        const suggestions = mainKeyword ? await searchMlitNotices(mainKeyword) : [];
+        if (suggestions.length > 0) {
+          suggestionLines = [
+            "",
+            `「${mainKeyword}」を含む告示:`,
+            ...suggestions.slice(0, 5).map((s) => `  - ${s.title}`),
+            "",
+            "正式名称で再度お試しください。",
+          ];
+        }
+      }
 
       const text = [
         `該当する告示を確認できませんでした: ${kokuji_name}`,
