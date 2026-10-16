@@ -586,7 +586,7 @@ e-Gov API は告示を収録していないため、`get_kokuji` は国土交通
 | API 並行呼び出し             | 最大 5 並行（200ms 間隔）        |
 | Vercel デプロイ              | 対応（MCP-over-HTTP + REST API） |
 | Vercel 関数タイムアウト      | 60 秒（maxDuration）             |
-| Node.js                      | >= 20.0.0                        |
+| Node.js                      | >= 22.12.0                       |
 
 ## セキュリティ
 
