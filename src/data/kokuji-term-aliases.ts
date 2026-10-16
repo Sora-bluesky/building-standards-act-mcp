@@ -10,8 +10,6 @@ const KOKUJI_TERM_ALIASES: Readonly<Record<string, string>> = {
   壁量基準: "令46条4項",
   // Existing wall quantity is assessed against the Order Article 46(4) wall-quantity rule.
   存在壁量: "令46条4項",
-  // Minimum column dimensions are governed by Building Standards Act Enforcement Order Article 43(1).
-  柱の小径: "令43条1項",
 };
 
 /** Append distinct provision aliases while preserving the user's original text. */

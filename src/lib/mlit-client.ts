@@ -399,6 +399,7 @@ function articleMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[
     const titleRefs = parseArticleRefs(entry.title);
     const matchedRefs = new Map<string, number>();
     for (const ref of refs) {
+      if (ref.law && !entry.title.includes(ref.law)) continue;
       let best: { matched: string; score: number } | undefined;
       for (const titleRef of titleRefs) {
         const matched = matchArticleRef(ref, titleRef);

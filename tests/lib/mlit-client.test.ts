@@ -226,6 +226,24 @@ describe("mlit-client", () => {
       expect(matches.map((match) => match.entry.document_number)).toEqual(["建設省告示第千百号"]);
     });
 
+    it("requires a named query law in the title while preserving bare references", async () => {
+      const decoyTitle = "道路運送車両の保安基準等の一部を改正する省令附則第二条第三項及び第五項に規定する自動車を定める件";
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        rows[0],
+        [decoyTitle, "国土交通省告示第573号", "2026-01-01", "", "", "https://example.com/573.pdf"],
+        ["建築基準法第二条第九号の基準", "建築基準法告示", "2000-01-01", "", "", "https://example.com/building.pdf"],
+      ]);
+
+      const namedMatches = await findCandidates("法第2条第9号");
+      expect(namedMatches.map((match) => match.entry.document_number)).toEqual(["建築基準法告示"]);
+      expect(namedMatches[0].stage).toBe("article");
+
+      const bareMatches = await findCandidates("2条");
+      expect(bareMatches.map((match) => match.entry.document_number))
+        .toEqual(["国土交通省告示第573号", "建築基準法告示"]);
+      expect(bareMatches.every((match) => match.stage === "article")).toBe(true);
+    });
+
     it("prefers a named law and specific paragraph over a bare or article-only reference", async () => {
       await setupHappyPath(MOCK_NOTICE_HTML, [
         ...rows,
@@ -234,6 +252,7 @@ describe("mlit-client", () => {
       ]);
       const matches = await findCandidates("令46条4項");
       expect(matches[0].entry.title).toBe(wallTitle);
+      expect(matches.some((match) => match.entry.document_number === "法令名なし")).toBe(false);
       expect(matches.find((match) => match.entry.document_number === "条のみ")?.matched)
         .toEqual(["第四十六条"]);
     });
@@ -267,15 +286,12 @@ describe("mlit-client", () => {
       expect(matches[0].matched).toEqual(["第百三十六条の二の十一第一号"]);
     });
 
-    it("expands the column-dimension alias through the same article stage", async () => {
+    it("does not expand the unsupported column-dimension alias", async () => {
       await setupHappyPath(MOCK_NOTICE_HTML, [
         ...rows,
         ["建築基準法施行令第四十三条第一項の基準", "柱の基準告示", "2000-01-01", "", "", "https://example.com/columns.pdf"],
       ]);
-      const [match] = await findCandidates("柱の小径");
-      expect(match.entry.document_number).toBe("柱の基準告示");
-      expect(match.stage).toBe("article");
-      expect(match.matched).toContain("第四十三条第一項");
+      expect(await findCandidates("柱の小径")).toEqual([]);
     });
 
     it("breaks article-score ties by newer date", async () => {

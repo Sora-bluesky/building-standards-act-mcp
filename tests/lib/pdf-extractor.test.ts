@@ -18,6 +18,7 @@ vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => ({
 }));
 
 import {
+  extractPdfText,
   extractTextFromPdf,
   isAllowedPdfUrl,
 } from "../../src/lib/pdf-extractor.js";
@@ -29,9 +30,13 @@ import {
 /** A fake PDF buffer (content is irrelevant since pdfjs-dist is mocked). */
 const FAKE_PDF_BUFFER = new ArrayBuffer(128);
 
-function createPdfResponse(buffer: ArrayBuffer = FAKE_PDF_BUFFER) {
+function createPdfResponse(
+  buffer: ArrayBuffer = FAKE_PDF_BUFFER,
+  lastModified?: string,
+) {
   return {
     ok: true,
+    headers: new Headers(lastModified ? { "Last-Modified": lastModified } : {}),
     arrayBuffer: () => Promise.resolve(buffer),
   };
 }
@@ -60,6 +65,43 @@ describe("pdf-extractor", () => {
     mockGetDocument.mockReset();
     mockGetPage.mockReset();
     mockGetTextContent.mockReset();
+  });
+
+  describe("extractPdfText", () => {
+    it("returns text and the UTC Last-Modified date, cached together for the wrapper", async () => {
+      const pdfUrl = "https://www.mlit.go.jp/test/metadata.pdf";
+      mockFetch.mockResolvedValueOnce(createPdfResponse(
+        FAKE_PDF_BUFFER, "Wed, 11 Sep 2024 13:26:36 GMT",
+      ));
+      setupPdfjsMock(["告示本文"]);
+
+      expect(await extractPdfText(pdfUrl)).toEqual({
+        text: "告示本文", lastModified: "2024-09-11",
+      });
+      expect(await extractPdfText(pdfUrl)).toEqual({
+        text: "告示本文", lastModified: "2024-09-11",
+      });
+      expect(await extractTextFromPdf(pdfUrl)).toBe("告示本文");
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(mockGetDocument).toHaveBeenCalledOnce();
+    });
+
+    it.each([undefined, "invalid-date"])("returns null for a missing or invalid Last-Modified header: %s", async (header) => {
+      mockFetch.mockResolvedValueOnce(createPdfResponse(FAKE_PDF_BUFFER, header));
+      setupPdfjsMock(["告示本文"]);
+
+      expect(await extractPdfText(`https://www.mlit.go.jp/test/date-${header}.pdf`))
+        .toEqual({ text: "告示本文", lastModified: null });
+    });
+
+    it("normalizes the date in UTC rather than the header timezone", async () => {
+      mockFetch.mockResolvedValueOnce(createPdfResponse(
+        FAKE_PDF_BUFFER, "Thu, 12 Sep 2024 01:00:00 +0900",
+      ));
+      setupPdfjsMock(["告示本文"]);
+      expect((await extractPdfText("https://www.mlit.go.jp/test/utc-date.pdf")).lastModified)
+        .toBe("2024-09-11");
+    });
   });
 
   describe("extractTextFromPdf — success cases", () => {

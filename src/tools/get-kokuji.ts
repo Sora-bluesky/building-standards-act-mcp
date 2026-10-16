@@ -3,7 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
 import { findKokujiCandidates, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
-import { extractTextFromPdf } from "../lib/pdf-extractor.js";
+import { extractPdfText, type PdfTextResult } from "../lib/pdf-extractor.js";
+import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import {
@@ -41,6 +42,25 @@ interface MlitDiagnostic {
   error: string | null;
 }
 
+/** Describe the PDF's evidence of currency without treating HTTP metadata as proof. */
+function pdfCurrencyLines(pdf: PdfTextResult): string[] {
+  const latestAmendment = extractLatestAmendment(pdf.text);
+  const lines: string[] = [];
+  if (latestAmendment) {
+    lines.push(`※ 国交省 DB の PDF に記載された最終改正: ${latestAmendment}`);
+  }
+  if (pdf.lastModified) {
+    lines.push(`※ 国交省 DB の PDF 更新日: ${pdf.lastModified}`);
+  }
+  if (lines.length === 0) {
+    return ["※ 国交省 DB の PDF の収録時点は確認できませんでした。最新の改正は e-Gov 法令検索または官報で確認してください。"];
+  }
+  return [
+    ...lines,
+    "これより後の改正は反映されていない可能性があります。最新の改正は e-Gov 法令検索または官報で確認してください。",
+  ];
+}
+
 /**
  * Attempt to fetch kokuji text via the MLIT pipeline:
  * 1. Find the PDF URL from the MLIT Excel notice database
@@ -51,7 +71,7 @@ interface MlitDiagnostic {
 async function fetchViaMlit(
   title: string,
   diagnostic?: MlitDiagnostic,
-): Promise<{ match: KokujiMatch; text: string } | null> {
+): Promise<(PdfTextResult & { match: KokujiMatch }) | null> {
   const [match] = await findKokujiCandidates(title, 1);
   if (diagnostic) {
     diagnostic.pdfUrl = match?.entry.pdf_url ?? null;
@@ -64,8 +84,8 @@ async function fetchViaMlit(
   }
 
   try {
-    const text = await extractTextFromPdf(match.entry.pdf_url);
-    return text ? { match, text } : null;
+    const pdf = await extractPdfText(match.entry.pdf_url);
+    return pdf.text ? { match, ...pdf } : null;
   } catch (err) {
     if (diagnostic) {
       diagnostic.error =
@@ -135,6 +155,8 @@ export function registerGetKokujiTool(server: McpServer): void {
             "",
             mlitText.text,
             "",
+            ...pdfCurrencyLines(mlitText),
+            "",
             "出典: 国土交通省 告示・通達データベース",
             "",
             "※ 掲載情報の正確性については万全を期しておりますが、",
@@ -148,13 +170,15 @@ export function registerGetKokujiTool(server: McpServer): void {
         // Step 2b: MLIT failed — try preset pdf_url if available
         if (preset.pdf_url) {
           try {
-            const pdfText = await extractTextFromPdf(preset.pdf_url);
+            const pdfText = await extractPdfText(preset.pdf_url);
             const text = [
               `【告示】${preset.title}`,
               `法令番号: ${preset.law_num}`,
               `委任元: ${preset.delegated_by}`,
               "",
-              pdfText,
+              pdfText.text,
+              "",
+              ...pdfCurrencyLines(pdfText),
               "",
               `出典: 国土交通省（PDF直接取得）`,
               `URL: ${preset.pdf_url}`,
@@ -226,6 +250,8 @@ export function registerGetKokujiTool(server: McpServer): void {
             : []),
           "",
           mlitText.text,
+          "",
+          ...pdfCurrencyLines(mlitText),
           "",
           "出典: 国土交通省 告示・通達データベース",
           "",

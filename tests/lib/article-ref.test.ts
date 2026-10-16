@@ -51,9 +51,10 @@ describe("expandKokujiAliases", () => {
       .toBe("必要壁量と存在壁量の壁量計算 令46条4項");
   });
 
-  it("expands the column-dimension family as well as wall quantity", () => {
+  it("expands wall quantity without adding the unsupported column-dimension alias", () => {
     expect(expandKokujiAliases("壁量基準と柱の小径"))
-      .toBe("壁量基準と柱の小径 令46条4項 令43条1項");
+      .toBe("壁量基準と柱の小径 令46条4項");
+    expect(expandKokujiAliases("柱の小径")).toBe("柱の小径");
   });
 
   it("leaves other terms unchanged", () => {
