@@ -6,6 +6,7 @@ vi.mock("../../src/lib/metrics.js", () => ({
 }));
 
 import {
+  paginateText,
   handleToolError,
   wrapToolHandler,
 } from "../../src/lib/tool-helpers.js";
@@ -16,6 +17,66 @@ import {
   EgovApiError,
 } from "../../src/lib/errors.js";
 import { recordToolCall } from "../../src/lib/metrics.js";
+
+describe("paginateText", () => {
+  it("preserves text that fits in one page", () => {
+    expect(paginateText("法令本文", 0, 4)).toEqual({
+      text: "法令本文",
+      total_chars: 4,
+      offset: 0,
+      next_offset: null,
+    });
+  });
+
+  it("returns two consecutive pages with a continuation note only on the first", () => {
+    expect(paginateText("あいうえお", 0, 3)).toEqual({
+      text: "あいう\n\n（続きがあります。offset=3 を指定して続きを取得してください。全体 5 文字）",
+      total_chars: 5,
+      offset: 0,
+      next_offset: 3,
+    });
+    expect(paginateText("あいうえお", 3, 3)).toEqual({
+      text: "えお",
+      total_chars: 5,
+      offset: 3,
+      next_offset: null,
+    });
+  });
+
+  it.each([4, 10])("returns a one-line note for offset %i at or past the end", (offset) => {
+    const result = paginateText("法令本文", offset, 3);
+    expect(result).toMatchObject({ total_chars: 4, offset, next_offset: null });
+    expect(result.text).toContain("offset");
+    expect(result.text).toContain("末尾");
+    expect(result.text).not.toContain("法令本文");
+    expect(result.text).not.toContain("\n");
+  });
+
+  it("preserves empty text without a note", () => {
+    expect(paginateText("", 0, 3)).toEqual({
+      text: "", total_chars: 0, offset: 0, next_offset: null,
+    });
+  });
+
+  it("moves a cut before a surrogate pair and resumes without losing it", () => {
+    const first = paginateText("あ😀い", 0, 2);
+    expect(first.next_offset).toBe(1);
+    expect(first.text).toMatch(/^あ\n\n/);
+    expect(paginateText("あ😀い", 1, 3).text).toBe("😀い");
+  });
+
+  it("normalizes an offset inside a surrogate pair", () => {
+    expect(paginateText("あ😀い", 2, 3)).toEqual({
+      text: "😀い", total_chars: 4, offset: 1, next_offset: null,
+    });
+  });
+
+  it("makes progress when a surrogate pair exceeds a one-unit page", () => {
+    const first = paginateText("😀い", 0, 1);
+    expect(first.next_offset).toBe(2);
+    expect(first.text).toMatch(/^😀\n\n/);
+  });
+});
 
 describe("handleToolError", () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;

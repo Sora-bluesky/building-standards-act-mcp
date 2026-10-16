@@ -96,6 +96,15 @@ describe("CircuitBreaker", () => {
     expect(cb.getState()).toBe("closed");
   });
 
+  it("does not count HTTP 400 as a circuit-breaker failure", async () => {
+    const error = new EgovApiError("element not found", 400);
+    for (let i = 0; i < 5; i++) {
+      await expect(cb.execute(async () => { throw error; })).rejects.toBe(error);
+    }
+    expect(cb.getState()).toBe("closed");
+    await expect(cb.execute(async () => "ok")).resolves.toBe("ok");
+  });
+
   it("stays closed on success", async () => {
     await cb.execute(async () => "ok");
     expect(cb.getState()).toBe("closed");

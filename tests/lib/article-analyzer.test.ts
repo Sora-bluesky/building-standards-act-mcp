@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
-  getLawData: vi.fn(),
+  getLawArticle: vi.fn(),
   searchLaws: vi.fn(),
 }));
 
-vi.mock("../../src/lib/egov-parser.js", () => ({
+vi.mock("../../src/lib/egov-parser.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-parser.js")>(),
   parseArticleStructured: vi.fn(),
 }));
 
@@ -14,7 +15,7 @@ vi.mock("../../src/lib/law-resolver.js", () => ({
 }));
 
 import { analyzeArticle } from "../../src/lib/article-analyzer.js";
-import { getLawData } from "../../src/lib/egov-client.js";
+import { getLawArticle } from "../../src/lib/egov-client.js";
 import { parseArticleStructured } from "../../src/lib/egov-parser.js";
 import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { StructuredArticle } from "../../src/lib/types.js";
@@ -96,7 +97,7 @@ describe("analyzeArticle", () => {
 
   it("throws for non-existent article", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(null);
 
     await expect(analyzeArticle("建築基準法", "9999")).rejects.toThrow(
@@ -106,7 +107,7 @@ describe("analyzeArticle", () => {
 
   it("returns complete analysis for a structured article", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
     const result = await analyzeArticle("建築基準法", "20");
@@ -119,7 +120,7 @@ describe("analyzeArticle", () => {
 
   it("counts structure correctly", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
     const result = await analyzeArticle("建築基準法", "20");
@@ -132,7 +133,7 @@ describe("analyzeArticle", () => {
 
   it("generates paragraph summaries", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
     const result = await analyzeArticle("建築基準法", "20");
@@ -145,7 +146,7 @@ describe("analyzeArticle", () => {
 
   it("summarizes references correctly", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(makeStructuredArticle());
 
     const result = await analyzeArticle("建築基準法", "20");
@@ -161,7 +162,7 @@ describe("analyzeArticle", () => {
 
   it("handles article with no references", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ references: undefined }),
     );
@@ -174,7 +175,7 @@ describe("analyzeArticle", () => {
 
   it("strips parentheses from caption", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ article_caption: "（目的）" }),
     );
@@ -185,7 +186,7 @@ describe("analyzeArticle", () => {
 
   it("handles empty caption", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticleStructured).mockReturnValue(
       makeStructuredArticle({ article_caption: "" }),
     );
@@ -196,7 +197,7 @@ describe("analyzeArticle", () => {
 
   it("includes structured_data in result", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     const article = makeStructuredArticle();
     vi.mocked(parseArticleStructured).mockReturnValue(article);
 

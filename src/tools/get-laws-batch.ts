@@ -1,15 +1,14 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveLawId } from "../lib/law-resolver.js";
-import { getLawData } from "../lib/egov-client.js";
-import { parseArticle, parseArticleStructured } from "../lib/egov-parser.js";
-import { formatArticleRef } from "../lib/errors.js";
+import { fetchParsedArticle } from "../lib/article-fetcher.js";
+import { ArticleNotFoundError, formatArticleRef } from "../lib/errors.js";
 import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 import { structuredArticleSchema } from "../lib/article-schemas.js";
 import type {
   BatchFetchItem,
   BatchFetchResult,
-  EgovLawDataResponse,
+  ResolvedLaw,
 } from "../lib/types.js";
 
 const MAX_REQUESTS = 20;
@@ -50,6 +49,7 @@ const outputSchema = {
       text: z.string().optional(),
       structured: structuredArticleSchema.optional(),
       error_message: z.string().optional(),
+      revision_note: z.string().optional(),
     }),
   ),
 } satisfies z.ZodRawShape;
@@ -59,7 +59,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
     "get_laws_batch",
     {
       title: "条文一括取得",
-      description: "複数の法令・条文を一括取得する。同一法令の複数条文はAPI呼び出し1回で効率的に処理。最大20件。",
+      description: "複数の法令・条文を一括取得する。各条文をe-Govから個別に条単位取得する。最大20件。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
@@ -89,34 +89,11 @@ export function registerGetLawsBatchTool(server: McpServer): void {
         };
       }
 
-      // Group requests by law_name to minimize API calls
-      const lawDataMap = new Map<string, EgovLawDataResponse | null>();
-      const resolvedMap = new Map<
-        string,
-        { title: string; law_num: string; source: string } | null
-      >();
-
+      // Resolve each distinct law name once, then fetch articles individually.
+      const resolvedMap = new Map<string, ResolvedLaw | null>();
       for (const req of requests) {
-        if (lawDataMap.has(req.law_name)) continue;
-
-        const resolved = await resolveLawId(req.law_name);
-        if (!resolved) {
-          lawDataMap.set(req.law_name, null);
-          resolvedMap.set(req.law_name, null);
-          continue;
-        }
-
-        resolvedMap.set(req.law_name, {
-          title: resolved.title,
-          law_num: resolved.law_num,
-          source: resolved.source,
-        });
-
-        try {
-          const data = await getLawData(resolved.law_id);
-          lawDataMap.set(req.law_name, data);
-        } catch {
-          lawDataMap.set(req.law_name, null);
+        if (!resolvedMap.has(req.law_name)) {
+          resolvedMap.set(req.law_name, await resolveLawId(req.law_name));
         }
       }
 
@@ -135,23 +112,14 @@ export function registerGetLawsBatchTool(server: McpServer): void {
           continue;
         }
 
-        const lawData = lawDataMap.get(req.law_name);
-        if (!lawData) {
-          results.push({
-            law_name: req.law_name,
-            article_number: req.article_number,
-            status: "error",
-            error_message: `法令「${req.law_name}」のデータ取得に失敗しました。`,
-          });
-          continue;
-        }
-
         try {
           if (req.format === "structured") {
-            const structured = parseArticleStructured(
-              lawData.law_full_text,
+            const fetched = await fetchParsedArticle(
+              resolvedInfo.law_id,
               req.article_number,
+              "structured",
             );
+            const structured = fetched?.article;
             if (!structured) {
               results.push({
                 law_name: resolvedInfo.title,
@@ -165,13 +133,16 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                 article_number: req.article_number,
                 status: "success",
                 structured,
+                ...(fetched?.revisionNote ? { revision_note: fetched.revisionNote } : {}),
               });
             }
           } else {
-            const article = parseArticle(
-              lawData.law_full_text,
+            const fetched = await fetchParsedArticle(
+              resolvedInfo.law_id,
               req.article_number,
+              "text",
             );
+            const article = fetched?.article;
             if (!article) {
               results.push({
                 law_name: resolvedInfo.title,
@@ -184,7 +155,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
                 law_name: resolvedInfo.title,
                 article_number: req.article_number,
                 status: "success",
-                text: article.text,
+                text: fetched?.revisionNote ? `${article.text}\n\n${fetched.revisionNote}` : article.text,
               });
             }
           }
@@ -192,9 +163,11 @@ export function registerGetLawsBatchTool(server: McpServer): void {
           results.push({
             law_name: resolvedInfo.title,
             article_number: req.article_number,
-            status: "error",
+            status: error instanceof ArticleNotFoundError ? "article_not_found" : "error",
             error_message:
-              error instanceof Error ? error.message : String(error),
+              error instanceof ArticleNotFoundError
+                ? error.message
+                : `法令「${req.law_name}」のデータ取得に失敗しました。`,
           });
         }
       }

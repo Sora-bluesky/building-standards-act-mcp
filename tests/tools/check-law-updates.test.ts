@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { z } from "zod";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawRevisions: vi.fn(),
@@ -26,7 +27,7 @@ const MOCK_RESOLVED = {
 let handler: Function;
 
 const mockServer = {
-  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: { inputSchema: z.ZodRawShape }, fn: Function) => {
     handler = fn;
   }),
 };
@@ -58,7 +59,13 @@ function makeRevision(
 describe("check_law_updates tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T00:30:00Z"));
     registerCheckLawUpdatesTool(mockServer as any);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("registers with correct name", () => {
@@ -69,6 +76,15 @@ describe("check_law_updates tool", () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it("accepts an optional ISO date and rejects malformed since values", () => {
+    const schema = z.object(mockServer.registerTool.mock.calls[0][1].inputSchema);
+    expect(schema.safeParse({}).success).toBe(true);
+    expect(schema.safeParse({ since: "2025-01-01", show_history: true }).success).toBe(true);
+    for (const since of ["2025-1-01", "2025/01/01", "2025-01-01T00:00:00Z", "", 2025]) {
+      expect(schema.safeParse({ since }).success).toBe(false);
+    }
   });
 
   it("returns not found message for unknown law_name", async () => {
@@ -90,6 +106,34 @@ describe("check_law_updates tool", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("法令改正チェック結果");
+    expect(result.content[0].text.split("\n")[1]).toBe("- 基準日: 2025-10-16（これより後に公布された改正を「改正あり」として報告）");
+    expect(result.content[0].text).toContain("最新: 1件");
+    expect(result.content[0].text).toContain("最新改正公布日: 2025-06-01");
+    expect(result.content[0].text).toContain("改正法令: 令和七年法律第九十九号");
+  });
+
+  it("forwards since to the single-law comparison", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawRevisions).mockResolvedValue({
+      law_info: { law_id: "325AC0000000201" } as any,
+      revisions: [makeRevision()],
+    });
+    const result = await handler({ law_name: "建築基準法", since: "2025-01-01" });
+    expect(result.content[0].text).toContain("- 基準日: 2025-01-01");
+    expect(result.content[0].text).toContain("**改正あり: 1件**");
+  });
+
+  it("forwards since to a batch without listing current laws", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawRevisions).mockResolvedValue({
+      law_info: { law_id: "325AC0000000201" } as any,
+      revisions: [makeRevision()],
+    });
+    const result = await handler({ group: "11章", since: "2025-06-01" });
+    expect(result.content[0].text).toContain("- 基準日: 2025-06-01");
+    expect(result.content[0].text).toContain("最新: 3件");
+    expect(result.content[0].text).not.toContain("最新改正公布日");
+    expect(result.content[0].text).not.toContain("建築基準法");
   });
 
   it("detects law with revisions", async () => {
@@ -121,6 +165,7 @@ describe("check_law_updates tool", () => {
     const result = await handler({
       law_name: "建築基準法",
       show_history: true,
+      since: "2026-01-01",
     });
 
     expect(result.content[0].text).toContain("改正履歴");

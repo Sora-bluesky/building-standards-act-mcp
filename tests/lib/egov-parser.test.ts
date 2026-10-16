@@ -1,12 +1,35 @@
 import { describe, it, expect } from "vitest";
 import {
   parseArticle,
+  toArticleElm,
+  getSupplProvisionArticleNumbers,
   parseAllArticles,
   parseFullLaw,
   parseArticleStructured,
   parseAllArticlesStructured,
 } from "../../src/lib/egov-parser.js";
 import type { LawNode } from "../../src/lib/types.js";
+
+describe("toArticleElm", () => {
+  it.each([
+    ["第20条", "MainProvision-Article_20"],
+    ["第6条の2", "MainProvision-Article_6_2"],
+    ["20", "MainProvision-Article_20"],
+    ["附則第3条", null],
+    ["別表第一", null],
+    ["第百条", null],
+  ])("maps %s to %s", (input, expected) => {
+    expect(toArticleElm(input)).toBe(expected);
+  });
+});
+
+it("lists article numbers contained in a supplementary provision", () => {
+  expect(getSupplProvisionArticleNumbers({ tag: "SupplProvision", children: [
+    { tag: "Article", attr: { Num: "1" } },
+    { tag: "Chapter", children: [{ tag: "Article", attr: { Num: "3_2" } }] },
+    { tag: "SupplProvisionLabel", children: ["附則"] },
+  ] })).toEqual(["1", "3_2"]);
+});
 
 // Minimal test law tree mimicking e-Gov API response format
 const TEST_LAW_TREE: LawNode = {

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
-  getLawData: vi.fn(),
+  getLawArticle: vi.fn(),
 }));
 
-vi.mock("../../src/lib/egov-parser.js", () => ({
+vi.mock("../../src/lib/egov-parser.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-parser.js")>(),
   parseArticle: vi.fn(),
 }));
 
@@ -13,7 +14,7 @@ vi.mock("../../src/lib/law-resolver.js", () => ({
 }));
 
 import { registerSuggestRelatedTool } from "../../src/tools/suggest-related.js";
-import { getLawData } from "../../src/lib/egov-client.js";
+import { getLawArticle } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
 import { resolveLawId } from "../../src/lib/law-resolver.js";
 
@@ -68,7 +69,7 @@ describe("suggest_related tool", () => {
 
   it("formats cross_law references correctly", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "20",
       article_caption: "（構造耐力）",
@@ -99,7 +100,7 @@ describe("suggest_related tool", () => {
 
   it("shows no-reference message for clean article", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "1",
       article_caption: "",
@@ -120,7 +121,7 @@ describe("suggest_related tool", () => {
 
   it("formats delegation references", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       article_num: "20",
       article_caption: "",

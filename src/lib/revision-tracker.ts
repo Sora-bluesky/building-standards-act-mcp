@@ -35,11 +35,17 @@ export async function mapWithConcurrency<T, R>(
   return results;
 }
 
-/**
- * Check if a single resolved law has revisions or has been repealed.
- */
+/** Compute the default amendment cutoff at call time in UTC. */
+export function getDefaultSince(): string {
+  const date = new Date();
+  date.setUTCMonth(date.getUTCMonth() - 12);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Check for amendments after the cutoff or repeal of a single law. */
 export async function checkLawUpdate(
   resolved: ResolvedLaw,
+  since: string = getDefaultSince(),
 ): Promise<LawUpdateCheckResult> {
   try {
     const response = await getLawRevisions(resolved.law_id);
@@ -50,6 +56,7 @@ export async function checkLawUpdate(
         title: resolved.title,
         law_id: resolved.law_id,
         status: "current",
+        since,
       };
     }
 
@@ -65,20 +72,22 @@ export async function checkLawUpdate(
         title: resolved.title,
         law_id: resolved.law_id,
         status: "repealed",
+        since,
         latest_amendment_date: latest.amendment_promulgate_date,
         latest_amendment_law:
           latest.amendment_law_title || latest.amendment_law_num,
       };
     }
 
-    // Report whether revisions exist
+    // ISO date strings preserve chronological ordering.
     const amendmentDate = latest.amendment_promulgate_date;
-    const hasRevisions = amendmentDate !== "";
+    const hasRevisions = amendmentDate !== "" && amendmentDate > since;
 
     return {
       title: resolved.title,
       law_id: resolved.law_id,
       status: hasRevisions ? "has_revisions" : "current",
+      since,
       latest_amendment_date: amendmentDate || undefined,
       latest_amendment_law:
         latest.amendment_law_title || latest.amendment_law_num || undefined,
@@ -88,6 +97,7 @@ export async function checkLawUpdate(
       title: resolved.title,
       law_id: resolved.law_id,
       status: "error",
+      since,
       error_message: error instanceof Error ? error.message : String(error),
     };
   }
@@ -99,12 +109,13 @@ export async function checkLawUpdate(
  */
 export async function checkLawUpdates(
   resolvedLaws: ResolvedLaw[],
+  since: string = getDefaultSince(),
 ): Promise<LawUpdateCheckResult[]> {
   return mapWithConcurrency(
     resolvedLaws,
     async (resolved) => {
       const wasCached = hasRevisionsCached(resolved.law_id);
-      const result = await checkLawUpdate(resolved);
+      const result = await checkLawUpdate(resolved, since);
       if (!wasCached) {
         await sleep(RATE_LIMIT_DELAY_MS);
       }

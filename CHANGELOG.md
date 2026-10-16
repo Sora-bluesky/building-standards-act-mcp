@@ -12,8 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ツール定義の現行化**: 10 ツールすべてを `server.tool()` から `registerTool()` に移行し、`title` と annotations（`readOnlyHint: true` / `destructiveHint: false` / `idempotentHint: true` / `openWorldHint: true`）を宣言。クライアントが各ツールを読み取り専用として扱えるようになった
 - **structuredContent**: `get_law` / `get_laws_batch` / `analyze_article` / `get_metrics` / `verify_citation` に `outputSchema` を定義し、text に加えて同じ内容を `structuredContent` で返す。呼び出し側で JSON 文字列を再パースする必要がなくなった
 
+- **新ツール `search_articles`**: e-Gov の `/api/2/keyword` で条文本文を全文検索する。`keyword`（AND / OR / NOT とワイルドカード可）、`law_title`（法令名で絞り込み。法令番号に解決して渡す）、`limit`（既定 10・最大 50）、`offset` を受け、法令名・法令 ID・該当箇所の区分（本則 / 附則 / 別表）・該当文を text と structuredContent で返す。e-Gov は条番号を返さないので、確定は `get_law` で行う
+- **条単位取得（`elm`）**: `get_law` / `get_laws_batch` / `verify_citation` / `suggest_related` / `analyze_article` は `law_data/{id}?elm=MainProvision-Article_N` で条だけを取得する（建築基準法第20条で 8.5 KB。全文は 1.29 MB）。キャッシュキーは law_id と elm の組。附則・別表・漢数字の条番号は従来どおり全文経路。全文を取るのは `get_full_law` だけになった
+- **未施行の改正附則**: `get_law` の「附則（改正法令番号）」で現行の法令データに該当の附則が無いとき、改正履歴から該当する `law_revision_id` を探して未施行版の法令データから取得し、施行日を添えて返す（例: 建築基準法施行令 附則（令和8年政令第284号）、施行 2026-11-01）
+- **出力上限**: `get_full_law` と `get_kokuji` に `max_chars`（既定 100,000）と `offset` を追加。超過分は「続きは offset=N」の案内を末尾に付けて切る
+- **`check_law_updates` の `since`**: 基準日（YYYY-MM-DD、既定は今日の 12 か月前）より後に公布された改正だけを「改正あり」にする。従来は改正履歴が一度でもあれば「改正あり」だった
+
 ### Changed
 
+- **REST API のエラー応答**: `api/tools/{name}` のエラーを MCP 側と同じサニタイズ（`handleToolError`）に統一。生のエラーメッセージを返さず、入力エラーは 400、未知のツールは 404、それ以外は 500
+- **改正附則の未収録条**: 抄録の附則に無い条を要求したとき、収録されている条番号を列挙して返す
 - **依存更新**: `@modelcontextprotocol/sdk` を ^1.26 から ^1.32.1 へ更新（1.32.0 で修正された OAuth クライアントの HIGH 脆弱性を含む）。`npm audit fix` で本番依存の脆弱性 10 件（critical 1 / high 5 / moderate 3 / low 1）を 0 件に
 - **CI**: cross-platform-test の Node.js マトリクスに 24 を追加（20 / 22 / 24）。CONTRIBUTING の記載を実態に合わせて修正
 - **版表記の一元化**: `src/lib/version.ts` の `SERVER_VERSION` を唯一の版の出所とし、MCP サーバー情報・OpenAPI `info.version`（旧 0.5.0）・MLIT 向け User-Agent（旧 1.5）・内部クライアント（旧 1.0.0）がすべて `package.json` と同じ版を名乗るように変更。版の不一致はユニットテストで検出

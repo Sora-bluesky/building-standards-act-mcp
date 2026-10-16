@@ -7,6 +7,7 @@ import type {
   EgovLawSearchResponse,
   EgovLawDataResponse,
   EgovLawRevisionsResponse,
+  EgovKeywordResponse,
 } from "./types.js";
 
 const BASE_URL = "https://laws.e-gov.go.jp/api/2";
@@ -27,6 +28,10 @@ const lawDataCache = createCache<EgovLawDataResponse>(
 const revisionsCache = createCache<EgovLawRevisionsResponse>(
   "revisions",
   REVISIONS_CACHE_TTL,
+);
+const keywordCache = createCache<EgovKeywordResponse>(
+  "keyword",
+  SEARCH_CACHE_TTL,
 );
 
 const circuitBreaker = new CircuitBreaker();
@@ -59,10 +64,25 @@ async function fetchJsonRaw<T>(url: string): Promise<T> {
     });
 
     if (!response.ok) {
+      let egovCode: string | undefined;
+      if (response.status === 400) {
+        try {
+          const body: unknown = await response.json();
+          if (
+            body && typeof body === "object" &&
+            "code" in body && typeof body.code === "string"
+          ) {
+            egovCode = body.code;
+          }
+        } catch {
+          // Preserve the HTTP error when the body is not JSON.
+        }
+      }
       throw new EgovApiError(
         `e-Gov API returned ${response.status}: ${response.statusText}`,
         response.status,
         url,
+        egovCode,
       );
     }
 
@@ -148,6 +168,61 @@ export async function getLawData(lawId: string): Promise<EgovLawDataResponse> {
   const result = await fetchJson<EgovLawDataResponse>(url);
 
   lawDataCache.set(cacheKey, result);
+  return result;
+}
+
+/** Fetch a single main-provision article without downloading the entire law. */
+export async function getLawArticle(
+  lawId: string,
+  elm: string,
+): Promise<EgovLawDataResponse | null> {
+  const cacheKey = `law:${lawId}:${elm}`;
+  const cached = lawDataCache.get(cacheKey);
+  recordCacheHit("law-data", !!cached);
+  if (cached) return cached;
+
+  const url = `${BASE_URL}/law_data/${encodeURIComponent(lawId)}?elm=${encodeURIComponent(elm)}&response_format=json`;
+  try {
+    const result = await fetchJson<EgovLawDataResponse>(url);
+    lawDataCache.set(cacheKey, result);
+    return result;
+  } catch (error) {
+    if (error instanceof EgovApiError && error.statusCode === 400) return null;
+    throw error;
+  }
+}
+
+/** Revision IDs use the same endpoint and cache as law IDs. */
+export function getLawDataByRevision(
+  revisionId: string,
+): Promise<EgovLawDataResponse> {
+  return getLawData(revisionId);
+}
+
+/** Search article text, with pagination measured in sentences. */
+export async function searchKeyword(params: {
+  keyword: string;
+  lawNum?: string;
+  limit: number;
+  offset: number;
+  sentenceTextSize?: number;
+}): Promise<EgovKeywordResponse> {
+  const query = new URLSearchParams({
+    keyword: params.keyword,
+    limit: String(params.limit),
+    offset: String(params.offset),
+    sentence_text_size: String(params.sentenceTextSize ?? 200),
+    response_format: "json",
+  });
+  if (params.lawNum !== undefined) query.set("law_num", params.lawNum);
+  const cacheKey = query.toString();
+  const cached = keywordCache.get(cacheKey);
+  recordCacheHit("keyword", !!cached);
+  if (cached) return cached;
+  const result = await fetchJson<EgovKeywordResponse>(
+    `${BASE_URL}/keyword?${cacheKey}`,
+  );
+  keywordCache.set(cacheKey, result);
   return result;
 }
 

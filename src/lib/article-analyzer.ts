@@ -1,5 +1,4 @@
-import { getLawData } from "./egov-client.js";
-import { parseArticleStructured } from "./egov-parser.js";
+import { fetchParsedArticle } from "./article-fetcher.js";
 import { formatArticleRef } from "./errors.js";
 import { resolveLawId } from "./law-resolver.js";
 import type { ArticleAnalysis, StructuredArticle } from "./types.js";
@@ -76,8 +75,12 @@ export async function analyzeArticle(
     throw new Error(`法令「${lawName}」が見つかりませんでした。`);
   }
 
-  const lawData = await getLawData(resolved.law_id);
-  const article = parseArticleStructured(lawData.law_full_text, articleNumber);
+  const fetched = await fetchParsedArticle(
+    resolved.law_id,
+    articleNumber,
+    "structured",
+  );
+  const article = fetched?.article;
 
   if (!article) {
     throw new Error(

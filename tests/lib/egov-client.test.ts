@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   searchLaws,
   getLawData,
+  getLawArticle,
+  getLawDataByRevision,
+  searchKeyword,
   getLawRevisions,
   _setRetryOptions,
   _resetCircuitBreaker,
@@ -220,7 +223,75 @@ describe("egov-client", () => {
     });
   });
 
+  describe("getLawArticle", () => {
+    it("encodes the law ID and elm and caches separately by law and article", async () => {
+      const response = { law_full_text: { tag: "Article", attr: { Num: "20" } } };
+      mockFetch.mockResolvedValue(createMockResponse(response));
+      const first = await getLawArticle("ARTICLE/URL", "MainProvision-Article_20");
+      expect(await getLawArticle("ARTICLE/URL", "MainProvision-Article_20")).toBe(first);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(mockFetch.mock.calls[0][0]).toBe("https://laws.e-gov.go.jp/api/2/law_data/ARTICLE%2FURL?elm=MainProvision-Article_20&response_format=json");
+      await getLawArticle("ARTICLE/URL", "MainProvision-Article_6_2");
+      await getLawArticle("ARTICLE/OTHER", "MainProvision-Article_20");
+      await getLawData("ARTICLE/URL");
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it("returns null on 400 without retrying, caching null or opening the breaker", async () => {
+      mockFetch.mockResolvedValue(createMockResponse({ code: "400021" }, 400, "Bad Request"));
+      for (let i = 0; i < 6; i++) {
+        expect(await getLawArticle("ARTICLE/MISSING", "MainProvision-Article_999")).toBeNull();
+      }
+      expect(mockFetch).toHaveBeenCalledTimes(6);
+    });
+
+    it("rethrows a 500 response", async () => {
+      mockFetch.mockResolvedValue(createMockResponse(null, 500, "Internal Server Error"));
+      await expect(getLawArticle("ARTICLE/ERROR", "MainProvision-Article_20")).rejects.toMatchObject({ statusCode: 500 });
+    });
+  });
+
+  describe("searchKeyword", () => {
+    it("builds the keyword query with law_num and caches by the complete query", async () => {
+      const response = { total_count: 0, sentence_count: 0, next_offset: null, items: [] };
+      mockFetch.mockResolvedValue(createMockResponse(response));
+      const params = { keyword: "耐火構造 AND 壁", lawNum: "昭和二十五年法律第二百一号", limit: 2, offset: 4 };
+      expect(await searchKeyword(params)).toEqual(response);
+      await searchKeyword(params);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      const url = new URL(mockFetch.mock.calls[0][0]);
+      expect(url.pathname).toBe("/api/2/keyword");
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        keyword: params.keyword, law_num: params.lawNum, limit: "2", offset: "4", sentence_text_size: "200", response_format: "json",
+      });
+      expect(url.searchParams.has("law_title")).toBe(false);
+      for (const override of [{ offset: 6 }, { limit: 3 }, { lawNum: undefined }, { keyword: "避難" }, { sentenceTextSize: 100 }]) {
+        await searchKeyword({ ...params, ...override });
+      }
+      expect(mockFetch).toHaveBeenCalledTimes(6);
+      const lastUrl = new URL(mockFetch.mock.calls[5][0]);
+      expect(lastUrl.searchParams.get("sentence_text_size")).toBe("100");
+    });
+  });
+
+  it("shares revision data with the full-text cache", async () => {
+    const response = { law_full_text: { tag: "Law", children: [] } };
+    mockFetch.mockResolvedValueOnce(createMockResponse(response));
+    expect(await getLawDataByRevision("REVISION_CACHE_ID")).toEqual(response);
+    expect(await getLawData("REVISION_CACHE_ID")).toEqual(response);
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
   describe("fetchJson error handling", () => {
+    it("preserves the e-Gov code on JSON 400 responses", async () => {
+      mockFetch.mockResolvedValue(createMockResponse({ code: "400021" }, 400, "Bad Request"));
+      await expect(getLawData("JSON_400")).rejects.toMatchObject({ statusCode: 400, egovCode: "400021" });
+    });
+
+    it("preserves HTTP 400 when its body is not JSON", async () => {
+      mockFetch.mockResolvedValue({ ...createMockResponse(null, 400, "Bad Request"), json: async () => { throw new SyntaxError("not JSON"); } });
+      await expect(getLawData("NON_JSON_400")).rejects.toMatchObject({ statusCode: 400, egovCode: undefined });
+    });
     it("throws EgovApiError with statusCode on HTTP 404", async () => {
       mockFetch.mockResolvedValue(createMockResponse(null, 404, "Not Found"));
 

@@ -12,6 +12,24 @@ export interface EgovLawEntry {
   current_revision_info: EgovRevisionInfo;
 }
 
+export interface EgovKeywordSentence {
+  position: string;
+  text: string;
+}
+
+export interface EgovKeywordItem {
+  law_info: EgovLawInfo;
+  revision_info: EgovRevisionInfo;
+  sentences: EgovKeywordSentence[];
+}
+
+export interface EgovKeywordResponse {
+  total_count: number;
+  sentence_count: number;
+  next_offset: number | null;
+  items: EgovKeywordItem[];
+}
+
 export interface EgovLawInfo {
   law_type: string;
   law_id: string;
@@ -58,6 +76,7 @@ export interface LawUpdateCheckResult {
   title: string;
   law_id: string;
   status: "current" | "has_revisions" | "repealed" | "error";
+  since?: string;
   latest_amendment_date?: string;
   latest_amendment_law?: string;
   revisions?: EgovRevisionInfo[];
@@ -148,6 +167,7 @@ export interface BatchFetchItem {
   status: "success" | "law_not_found" | "article_not_found" | "error";
   text?: string;
   structured?: StructuredArticle;
+  revision_note?: string;
   error_message?: string;
 }
 

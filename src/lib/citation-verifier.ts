@@ -1,6 +1,5 @@
-import { getLawData } from "./egov-client.js";
-import { parseArticle } from "./egov-parser.js";
-import { formatArticleRef } from "./errors.js";
+import { fetchParsedArticle } from "./article-fetcher.js";
+import { ArticleNotFoundError, formatArticleRef } from "./errors.js";
 import { resolveLawId } from "./law-resolver.js";
 import type { CitationVerification } from "./types.js";
 
@@ -104,8 +103,12 @@ export async function verifyCitation(
       };
     }
 
-    const lawData = await getLawData(resolved.law_id);
-    const article = parseArticle(lawData.law_full_text, articleNumber);
+    const fetched = await fetchParsedArticle(
+      resolved.law_id,
+      articleNumber,
+      "text",
+    );
+    const article = fetched?.article;
 
     if (!article) {
       return {
@@ -154,7 +157,7 @@ export async function verifyCitation(
     return {
       law_name: lawName,
       article_number: articleNumber,
-      status: "error",
+      status: error instanceof ArticleNotFoundError ? "article_not_found" : "error",
       error_message: error instanceof Error ? error.message : String(error),
     };
   }

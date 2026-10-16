@@ -6,6 +6,7 @@ import {
   checkLawUpdate,
   checkLawUpdates,
   getLawRevisionHistory,
+  getDefaultSince,
   mapWithConcurrency,
   RATE_LIMIT_DELAY_MS,
   CONCURRENCY,
@@ -18,6 +19,13 @@ import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 const registry = new LawRegistry();
 
 const schema = {
+  since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe(
+      "基準日（YYYY-MM-DD）。この日より後に公布された改正だけを『改正あり』として報告する。省略時は今日の 12 か月前",
+    ),
   law_name: z
     .string()
     .max(200)
@@ -39,14 +47,19 @@ const schema = {
     .describe("true で改正履歴の詳細を表示。law_name 指定時のみ有効。"),
 };
 
-function formatSummary(results: LawUpdateCheckResult[]): string {
+function formatSummary(
+  results: LawUpdateCheckResult[],
+  since: string,
+  includeCurrentDetails = false,
+): string {
   const hasRevisions = results.filter((r) => r.status === "has_revisions");
   const repealed = results.filter((r) => r.status === "repealed");
   const errors = results.filter((r) => r.status === "error");
   const current = results.filter((r) => r.status === "current");
 
   const lines: string[] = [];
-  lines.push("## 法令改正チェック結果\n");
+  lines.push("## 法令改正チェック結果");
+  lines.push(`- 基準日: ${since}（これより後に公布された改正を「改正あり」として報告）`);
   lines.push(`- チェック対象: ${results.length}件`);
   lines.push(`- 最新: ${current.length}件`);
   if (hasRevisions.length > 0)
@@ -73,6 +86,18 @@ function formatSummary(results: LawUpdateCheckResult[]): string {
       lines.push(`- **${r.title}** (${r.law_id})`);
       if (r.latest_amendment_date) {
         lines.push(`  - 改正公布日: ${r.latest_amendment_date}`);
+      }
+    }
+  }
+
+  if (includeCurrentDetails) {
+    for (const r of current) {
+      lines.push(`\n- **${r.title}** (${r.law_id})`);
+      if (r.latest_amendment_date) {
+        lines.push(`  - 最新改正公布日: ${r.latest_amendment_date}`);
+      }
+      if (r.latest_amendment_law) {
+        lines.push(`  - 改正法令: ${r.latest_amendment_law}`);
       }
     }
   }
@@ -127,7 +152,7 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
     },
     wrapToolHandler(
       "check_law_updates",
-      async ({ law_name, group, show_history }) => {
+      async ({ law_name, group, show_history, since = getDefaultSince() }) => {
         // Single law check with optional history
         if (law_name) {
           const resolved = await resolveLawId(law_name);
@@ -144,11 +169,11 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
 
           const result = show_history
             ? await getLawRevisionHistory(resolved)
-            : await checkLawUpdate(resolved);
+            : await checkLawUpdate(resolved, since);
 
           const text = show_history
             ? formatHistory(result)
-            : formatSummary([result]);
+            : formatSummary([result], since, true);
 
           return { content: [{ type: "text" as const, text }] };
         }
@@ -180,8 +205,8 @@ export function registerCheckLawUpdatesTool(server: McpServer): void {
           (r): r is ResolvedLaw => r !== null,
         );
 
-        const results = await checkLawUpdates(resolvedLaws);
-        const text = formatSummary(results);
+        const results = await checkLawUpdates(resolvedLaws, since);
+        const text = formatSummary(results, since);
 
         return { content: [{ type: "text" as const, text }] };
       },

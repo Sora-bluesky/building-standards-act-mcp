@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import { invokeTool } from "../../src/lib/tool-invoker.js";
+import { handleToolError } from "../../src/lib/tool-helpers.js";
 
 const EXCLUDED_TOOLS = new Set(["validate_presets", "get_metrics"]);
 
@@ -40,10 +42,21 @@ export default async function handler(
     const result = await invokeTool(name, args);
     res.status(200).json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    res.status(500).json({
-      content: [{ type: "text", text: message }],
-      isError: true,
-    });
+    const result = handleToolError(name, error);
+    if (error instanceof McpError && error.code === ErrorCode.InvalidParams) {
+      result.content = [
+        {
+          type: "text",
+          text: "エラー: 入力パラメータが不正です。OpenAPI スキーマ（/api/openapi.json）を確認してください。",
+        },
+      ];
+      res.status(400).json(result);
+    } else if (
+      error instanceof McpError && error.code === ErrorCode.MethodNotFound
+    ) {
+      res.status(404).json({ error: `Tool '${name}' is not available via REST API` });
+    } else {
+      res.status(500).json(result);
+    }
   }
 }

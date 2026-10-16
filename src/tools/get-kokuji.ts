@@ -6,7 +6,12 @@ import { findKokujiPdfUrl, searchMlitNotices } from "../lib/mlit-client.js";
 import { extractTextFromPdf } from "../lib/pdf-extractor.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
-import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
+import {
+  DEFAULT_MAX_CHARS,
+  paginateText,
+  TOOL_ANNOTATIONS,
+  wrapToolHandler,
+} from "../lib/tool-helpers.js";
 
 const registry = new KokujiRegistry();
 
@@ -15,6 +20,19 @@ const schema = {
     .string()
     .max(200)
     .describe("告示名（例: 耐火構造の構造方法を定める件、不燃材料を定める件）"),
+  max_chars: z
+    .number()
+    .int()
+    .min(1_000)
+    .max(500_000)
+    .default(DEFAULT_MAX_CHARS)
+    .describe("1回に取得する最大文字数（1,000〜500,000）。省略時は100,000文字。"),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .default(0)
+    .describe("取得開始位置（0から始まる文字位置）。続きの取得時は案内された offset を指定。"),
 };
 
 /** Diagnostic info collected during fetchViaMlit for error reporting. */
@@ -94,7 +112,12 @@ export function registerGetKokujiTool(server: McpServer): void {
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
     },
-    wrapToolHandler("get_kokuji", async ({ kokuji_name }) => {
+    wrapToolHandler("get_kokuji", async ({
+      kokuji_name, max_chars = DEFAULT_MAX_CHARS, offset = 0,
+    }) => {
+      const textResult = (text: string) => ({
+        content: [{ type: "text" as const, text: paginateText(text, offset, max_chars).text }],
+      });
       // Step 1: Check preset registry for known kokuji
       const preset = registry.findByName(kokuji_name);
 
@@ -118,7 +141,7 @@ export function registerGetKokujiTool(server: McpServer): void {
             "正確な条文は官報または法令集で確認してください。",
           ].join("\n");
 
-          return { content: [{ type: "text" as const, text }] };
+          return textResult(text);
         }
 
         // Step 2b: MLIT failed — try preset pdf_url if available
@@ -135,7 +158,7 @@ export function registerGetKokujiTool(server: McpServer): void {
               `出典: 国土交通省（PDF直接取得）`,
               `URL: ${preset.pdf_url}`,
             ].join("\n");
-            return { content: [{ type: "text" as const, text }] };
+            return textResult(text);
           } catch (err) {
             // Update diagnostic and fall through to next fallback
             diag.pdfUrl = preset.pdf_url;
@@ -159,7 +182,7 @@ export function registerGetKokujiTool(server: McpServer): void {
               "出典: e-Gov法令検索",
             ].join("\n");
 
-            return { content: [{ type: "text" as const, text }] };
+            return textResult(text);
           } catch {
             // e-Gov also failed — fall through to "not found" message
           }
@@ -187,7 +210,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "ネットワーク接続を確認するか、時間をおいて再度お試しください。",
         ].join("\n");
 
-        return { content: [{ type: "text" as const, text }] };
+        return textResult(text);
       }
 
       // Step 3: No preset — try MLIT search directly
@@ -204,7 +227,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "国土交通省の告示データベースから検索して取得しました。",
         ].join("\n");
 
-        return { content: [{ type: "text" as const, text }] };
+        return textResult(text);
       }
 
       // Step 4: MLIT not found — try e-Gov API as final fallback
@@ -221,7 +244,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "※ この告示はプリセットに含まれていないため、検索結果から取得しました。",
         ].join("\n");
 
-        return { content: [{ type: "text" as const, text }] };
+        return textResult(text);
       }
 
       // Nothing found anywhere — suggest similar entries from MLIT database
@@ -256,7 +279,7 @@ export function registerGetKokujiTool(server: McpServer): void {
         ...suggestionLines,
       ].join("\n");
 
-      return { content: [{ type: "text" as const, text }] };
+      return textResult(text);
     }),
   );
 }

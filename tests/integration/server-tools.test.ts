@@ -358,6 +358,22 @@ const DEFAULT_REVISIONS_RESPONSE = {
   ],
 };
 
+function mockArticleResponse(url: string) {
+  const elm = new URL(url).searchParams.get("elm");
+  if (!elm) return createMockResponse(KENCHIKU_LAW_DATA);
+  const nodes = [KENCHIKU_LAW_TREE];
+  while (nodes.length > 0) {
+    const node = nodes.pop()!;
+    if (node.tag === "Article" && elm === `MainProvision-Article_${node.attr?.Num}`) {
+      return createMockResponse({ ...KENCHIKU_LAW_DATA, law_full_text: node });
+    }
+    for (const child of node.children ?? []) {
+      if (typeof child !== "string") nodes.push(child);
+    }
+  }
+  return createMockResponse({ code: "400021" }, 400, "Bad Request");
+}
+
 function setupDefaultRouter() {
   mockFetch.mockImplementation(async (url: string) => {
     if (typeof url !== "string") {
@@ -371,7 +387,7 @@ function setupDefaultRouter() {
 
     // Law data endpoint
     if (url.includes("/law_data/325AC0000000201")) {
-      return createMockResponse(KENCHIKU_LAW_DATA);
+      return mockArticleResponse(url);
     }
     if (url.includes("/law_data/KOKUJI_INTEG_001")) {
       return createMockResponse(KOKUJI_LAW_DATA);
@@ -408,7 +424,7 @@ function setupErrorRouter(options: {
       }
       // Fall through to default behavior for non-error lawIds
       if (url.includes("/law_data/325AC0000000201")) {
-        return createMockResponse(KENCHIKU_LAW_DATA);
+        return mockArticleResponse(url);
       }
       if (url.includes("/law_data/KOKUJI_INTEG_001")) {
         return createMockResponse(KOKUJI_LAW_DATA);
@@ -476,7 +492,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 10 tools", async () => {
+    it("listTools returns all 11 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -488,16 +504,17 @@ describe("Integration: MCP Server Tools", () => {
         "get_law",
         "get_laws_batch",
         "get_metrics",
+        "search_articles",
         "search_law",
         "suggest_related",
         "verify_citation",
       ]);
     });
 
-    it("exposes titles, read-only annotations and exactly five output schemas", async () => {
+    it("exposes titles, read-only annotations and exactly six output schemas", async () => {
       const { tools } = await client.listTools();
 
-      expect(tools).toHaveLength(10);
+      expect(tools).toHaveLength(11);
       for (const tool of tools) {
         expect(tool.title).toBeTruthy();
         expect(tool.annotations).toMatchObject({
@@ -516,6 +533,7 @@ describe("Integration: MCP Server Tools", () => {
         "get_law",
         "get_laws_batch",
         "get_metrics",
+        "search_articles",
         "verify_citation",
       ]);
     });
@@ -530,11 +548,44 @@ describe("Integration: MCP Server Tools", () => {
     });
   });
 
+  describe("search_articles", () => {
+    it("searches article text through the real server and returns structured hits", async () => {
+      mockFetch.mockImplementation(async (url: string) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/keyword")) {
+          expect(parsed.searchParams.get("keyword")).toBe("耐火構造");
+          expect(parsed.searchParams.get("limit")).toBe("10");
+          expect(parsed.searchParams.get("offset")).toBe("0");
+          return createMockResponse({ total_count: 328, sentence_count: 2, next_offset: 2, items: [{
+            law_info: KENCHIKU_LAW_DATA.law_info,
+            revision_info: KENCHIKU_LAW_DATA.revision_info,
+            sentences: [
+              { position: "mainprovision", text: "壁は<span>耐火構造</span>とする。" },
+              { position: "appdxtable", text: "<span>耐火構造</span>の基準" },
+            ],
+          }] });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+      const result = await client.callTool({ name: "search_articles", arguments: { keyword: "耐火構造" } });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent?.hits).toHaveLength(2);
+      expect(getText(result)).toContain("【耐火構造】");
+      expect(getText(result)).toContain("次の offset: 2");
+    });
+  });
+
   // ── get_law ─────────────────────────────────────
 
   describe("get_law", () => {
     it("returns article text for 建築基準法 第20条", async () => {
-      setupDefaultRouter();
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes("/laws?law_title=")) return createMockResponse(SEARCH_RESULT);
+        if (url.includes("/law_data/") && url.includes("elm=MainProvision-Article_20")) {
+          return mockArticleResponse(url);
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
 
       const result = await client.callTool({
         name: "get_law",
@@ -549,6 +600,10 @@ describe("Integration: MCP Server Tools", () => {
       expect(text).toContain("建築物は、自重、積載荷重");
       expect(text).toContain("e-Gov法令検索");
       expect(text).toContain("昭和二十五年法律第二百一号");
+      const dataCalls = mockFetch.mock.calls.filter(([url]) => url.includes("/law_data/"));
+      expect(dataCalls).toHaveLength(1);
+      expect(dataCalls[0][0]).toContain("elm=MainProvision-Article_20");
+      expect(mockFetch.mock.calls.some(([url]) => url.includes("/laws?law_title="))).toBe(true);
     });
 
     it("returns article text using abbreviation 建基法", async () => {
@@ -1142,7 +1197,7 @@ describe("Integration: MCP Server Tools", () => {
 
         // Law data endpoint
         if (url.includes("/law_data/325AC0000000201")) {
-          return createMockResponse(KENCHIKU_LAW_DATA);
+          return mockArticleResponse(url);
         }
 
         // Search endpoint: return empty for unknown law names

@@ -1,12 +1,19 @@
 export class EgovApiError extends Error {
   public readonly statusCode: number | undefined;
   public readonly endpoint: string | undefined;
+  public readonly egovCode?: string;
 
-  constructor(message: string, statusCode?: number, endpoint?: string) {
+  constructor(
+    message: string,
+    statusCode?: number,
+    endpoint?: string,
+    egovCode?: string,
+  ) {
     super(message);
     this.name = "EgovApiError";
     this.statusCode = statusCode;
     this.endpoint = endpoint;
+    this.egovCode = egovCode;
   }
 }
 
@@ -24,8 +31,8 @@ export class ArticleNotFoundError extends Error {
   public readonly articleNumber: string;
   public readonly lawName: string;
 
-  constructor(articleNumber: string, lawName: string) {
-    super(`${lawName}の${articleNumber}が見つかりません`);
+  constructor(articleNumber: string, lawName: string, message?: string) {
+    super(message ?? `${lawName}の${articleNumber}が見つかりません`);
     this.name = "ArticleNotFoundError";
     this.articleNumber = articleNumber;
     this.lawName = lawName;

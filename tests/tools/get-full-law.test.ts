@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 
 // Mock external dependencies BEFORE importing the tool module
 vi.mock("../../src/lib/egov-client.js", () => ({
@@ -29,7 +30,7 @@ const MOCK_RESOLVED = {
 let handler: Function;
 
 const mockServer = {
-  registerTool: vi.fn((_name: string, _config: unknown, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: { inputSchema: z.ZodRawShape }, fn: Function) => {
     handler = fn;
   }),
 };
@@ -48,6 +49,22 @@ describe("get_full_law tool", () => {
       }),
       expect.any(Function),
     );
+  });
+
+  it("registers pagination defaults and integer limits without an output schema", () => {
+    const config = mockServer.registerTool.mock.calls[0][1];
+    const schema = z.object(config.inputSchema);
+    expect(schema.parse({ law_name: "建築基準法" })).toEqual({
+      law_name: "建築基準法", max_chars: 100_000, offset: 0,
+    });
+    for (const params of [
+      { max_chars: 999 }, { max_chars: 500_001 }, { max_chars: 1000.5 },
+      { offset: -1 }, { offset: 0.5 },
+    ]) {
+      expect(schema.safeParse({ law_name: "建築基準法", ...params }).success).toBe(false);
+    }
+    expect(schema.safeParse({ law_name: "建築基準法", max_chars: 500_000, offset: 1000 }).success).toBe(true);
+    expect(config).not.toHaveProperty("outputSchema");
   });
 
   it("returns full law text when found", async () => {
@@ -86,6 +103,36 @@ describe("get_full_law tool", () => {
     expect(result.content[0].text).toContain("エラー");
     expect(result.content[0].text).toContain("存在しない法律");
     expect(getLawData).not.toHaveBeenCalled();
+  });
+
+  it("paginates the assembled text including headers and continues at offset", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawData).mockResolvedValue({
+      law_full_text: { tag: "Law", children: [] },
+    } as Awaited<ReturnType<typeof getLawData>>);
+    const body = "本文".repeat(750);
+    vi.mocked(parseFullLaw).mockReturnValue(body);
+    const complete = [
+      "【建築基準法】全文", "法令番号: 昭和二十五年法律第二百一号",
+      "", body, "", "出典: e-Gov法令検索",
+    ].join("\n");
+
+    const first = await handler({ law_name: "建築基準法", max_chars: 1000, offset: 0 });
+    const second = await handler({ law_name: "建築基準法", max_chars: 1000, offset: 1000 });
+
+    expect(first.content[0].text).toBe(`${complete.slice(0, 1000)}\n\n（続きがあります。offset=1000 を指定して続きを取得してください。全体 ${complete.length} 文字）`);
+    expect(second.content[0].text).toBe(complete.slice(1000));
+    expect(first).not.toHaveProperty("structuredContent");
+  });
+
+  it("uses the default page size when pagination inputs are omitted", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawData).mockResolvedValue({
+      law_full_text: { tag: "Law", children: [] },
+    } as Awaited<ReturnType<typeof getLawData>>);
+    vi.mocked(parseFullLaw).mockReturnValue("文".repeat(100_001));
+    const result = await handler({ law_name: "建築基準法" });
+    expect(result.content[0].text).toContain("offset=100000");
   });
 
   it("returns error on API failure", async () => {

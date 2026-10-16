@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
-  getLawData: vi.fn(),
+  getLawArticle: vi.fn(),
   searchLaws: vi.fn(),
 }));
 
-vi.mock("../../src/lib/egov-parser.js", () => ({
+vi.mock("../../src/lib/egov-parser.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-parser.js")>(),
   parseArticle: vi.fn(),
 }));
 
@@ -18,7 +19,7 @@ import {
   calculateMatchScore,
   verifyCitation,
 } from "../../src/lib/citation-verifier.js";
-import { getLawData } from "../../src/lib/egov-client.js";
+import { getLawArticle } from "../../src/lib/egov-client.js";
 import { parseArticle } from "../../src/lib/egov-parser.js";
 import { resolveLawId } from "../../src/lib/law-resolver.js";
 
@@ -111,7 +112,7 @@ describe("verifyCitation", () => {
 
   it("returns article_not_found when article does not exist", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(null);
 
     const result = await verifyCitation("建築基準法", "9999");
@@ -120,7 +121,7 @@ describe("verifyCitation", () => {
 
   it("returns verified when article exists (no claimed_text)", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     const result = await verifyCitation("建築基準法", "20");
@@ -130,7 +131,7 @@ describe("verifyCitation", () => {
 
   it("returns verified when claimed_text matches", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     const result = await verifyCitation(
@@ -144,7 +145,7 @@ describe("verifyCitation", () => {
 
   it("returns mismatch for completely wrong text", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     const result = await verifyCitation(
@@ -159,7 +160,7 @@ describe("verifyCitation", () => {
 
   it("returns verified for empty claimed_text", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue(MOCK_ARTICLE as any);
 
     const result = await verifyCitation("建築基準法", "20", "");
@@ -168,7 +169,7 @@ describe("verifyCitation", () => {
 
   it("returns error on API failure", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockRejectedValue(new Error("timeout"));
+    vi.mocked(getLawArticle).mockRejectedValue(new Error("timeout"));
 
     const result = await verifyCitation("建築基準法", "20");
     expect(result.status).toBe("error");
@@ -177,7 +178,7 @@ describe("verifyCitation", () => {
 
   it("handles whitespace/punctuation differences as match", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
-    vi.mocked(getLawData).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({
       ...MOCK_ARTICLE,
       text: "建築物は、自重に対して安全。",

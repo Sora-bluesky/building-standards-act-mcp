@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../src/lib/egov-client.js", () => ({
   getLawRevisions: vi.fn(),
@@ -9,6 +9,7 @@ import {
   checkLawUpdate,
   checkLawUpdates,
   getLawRevisionHistory,
+  getDefaultSince,
   mapWithConcurrency,
 } from "../../src/lib/revision-tracker.js";
 import { getLawRevisions } from "../../src/lib/egov-client.js";
@@ -51,20 +52,45 @@ function makeRevision(
 describe("revision-tracker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-16T00:30:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("computes the default since date 12 UTC months back at call time", () => {
+    expect(getDefaultSince()).toBe("2025-10-16");
+    vi.setSystemTime(new Date("2027-01-01T00:30:00Z"));
+    expect(getDefaultSince()).toBe("2026-01-01");
   });
 
   describe("checkLawUpdate", () => {
-    it("returns has_revisions when amendment date exists", async () => {
+    it("returns has_revisions when amendment date is after since", async () => {
       vi.mocked(getLawRevisions).mockResolvedValue({
         law_info: { law_id: "325AC0000000201" } as any,
         revisions: [makeRevision({ amendment_promulgate_date: "2025-06-01" })],
       });
 
-      const result = await checkLawUpdate(makeResolved());
+      const result = await checkLawUpdate(makeResolved(), "2025-01-01");
 
       expect(result.status).toBe("has_revisions");
       expect(result.title).toBe("建築基準法");
       expect(result.latest_amendment_date).toBe("2025-06-01");
+      expect(result.since).toBe("2025-01-01");
+    });
+
+    it.each(["2025-06-02", "2025-06-01"])("returns current at or before since %s with amendment metadata", async (since) => {
+      vi.mocked(getLawRevisions).mockResolvedValue({
+        law_info: { law_id: "325AC0000000201" } as any,
+        revisions: [makeRevision()],
+      });
+      expect(await checkLawUpdate(makeResolved(), since)).toMatchObject({
+        status: "current", since,
+        latest_amendment_date: "2025-06-01",
+        latest_amendment_law: "令和七年法律第九十九号",
+      });
     });
 
     it("returns has_revisions with latest amendment law info", async () => {
@@ -91,9 +117,10 @@ describe("revision-tracker", () => {
         ],
       });
 
-      const result = await checkLawUpdate(makeResolved());
+      const result = await checkLawUpdate(makeResolved(), "2026-10-01");
 
       expect(result.status).toBe("repealed");
+      expect(result.since).toBe("2026-10-01");
     });
 
     it("returns has_revisions when repeal_status is 'none'", async () => {
@@ -107,7 +134,7 @@ describe("revision-tracker", () => {
         ],
       });
 
-      const result = await checkLawUpdate(makeResolved());
+      const result = await checkLawUpdate(makeResolved(), "2024-12-31");
 
       expect(result.status).toBe("has_revisions");
     });
@@ -121,6 +148,7 @@ describe("revision-tracker", () => {
       const result = await checkLawUpdate(makeResolved());
 
       expect(result.status).toBe("current");
+      expect(result.since).toBe("2025-10-16");
     });
 
     it("returns error when API call fails", async () => {
@@ -132,6 +160,7 @@ describe("revision-tracker", () => {
 
       expect(result.status).toBe("error");
       expect(result.error_message).toContain("API connection failed");
+      expect(result.since).toBe("2025-10-16");
     });
 
     it("returns current when amendment_promulgate_date is empty", async () => {
@@ -176,12 +205,13 @@ describe("revision-tracker", () => {
         makeResolved({ law_id: "BBB", title: "法B" }),
       ];
 
-      const results = await checkLawUpdates(resolvedLaws);
+      const results = await checkLawUpdates(resolvedLaws, "2025-01-01");
 
       expect(results).toHaveLength(2);
       expect(results[0].title).toBe("法A");
       expect(results[1].title).toBe("法B");
       expect(getLawRevisions).toHaveBeenCalledTimes(2);
+      expect(results.every((result) => result.status === "current" && result.since === "2025-01-01")).toBe(true);
     });
   });
 

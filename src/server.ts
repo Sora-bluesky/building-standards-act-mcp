@@ -3,6 +3,7 @@ import { SERVER_VERSION } from "./lib/version.js";
 import { registerGetLawTool } from "./tools/get-law.js";
 import { registerGetFullLawTool } from "./tools/get-full-law.js";
 import { registerSearchLawTool } from "./tools/search-law.js";
+import { registerSearchArticlesTool } from "./tools/search-articles.js";
 import { registerGetKokujiTool } from "./tools/get-kokuji.js";
 
 import { registerCheckLawUpdatesTool } from "./tools/check-law-updates.js";
@@ -21,12 +22,12 @@ const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタ�
   - 別表: 「別表第一」「別表第二」等で数値基準を含む別表を取得可能
   - 改正附則: 「附則（令和○年政令第○号）」で特定改正の経過措置を取得可能。法令番号は check_law_updates で確認
 - get_full_law: 法令全文を取得（例: 建築基準法施行令）
-- search_law: 法令名（タイトル）で建築関連法令を検索する。条文本文のキーワード検索は不可。
-  - 条文内の用語（壁量、経過措置等）を探す場合は get_law で条番号を直接指定するか、get_full_law で全文取得してください
+- search_law: 法令名（タイトル）を検索する。条文本文の検索には search_articles を使う
+- search_articles: 条文本文を検索する。keyword 必須、law_title で法令名・略称による絞り込みが可能。条番号は返らないので get_law で確定する
 - get_kokuji: 告示の全文を国土交通省の告示データベース(PDF)から動的に取得する。正式名称またはキーワードで指定可能（例: 耐火構造の構造方法を定める件）。
   ※ 国交省データベースに未収録の告示は取得できません。取得失敗時は類似告示を提案します
 - check_law_updates: 法令の改正状況を確認する（法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示）
-- get_laws_batch: 複数の法令・条文を一括取得する（最大20件、同一法令は1回のAPI呼び出しで効率処理）
+- get_laws_batch: 複数の法令・条文を一括取得する（最大20件、e-Govから条単位取得）
 - verify_citation: AIの回答に含まれる法令引用を検証する（条文存在確認・テキスト照合、最大10件）
 - suggest_related: 指定した条文の関連法令・委任先・同法令内参照を自動抽出して提案する
 - analyze_article: 条文の構造解析メタデータ（項数・号数・参照統計・プレビュー）をJSON形式で返す
@@ -60,6 +61,7 @@ export function createServer(): McpServer {
   registerGetLawTool(server);
   registerGetFullLawTool(server);
   registerSearchLawTool(server);
+  registerSearchArticlesTool(server);
   registerGetKokujiTool(server);
   registerCheckLawUpdatesTool(server);
   registerGetLawsBatchTool(server);
