@@ -302,7 +302,7 @@ describe("get_laws_batch tool", () => {
     expect(JSON.stringify(withAnotherBody, null, 2).length).toBeGreaterThan(10_000);
   });
 
-  it("defaults to 8,000 body characters per item and 60,000 for the final JSON", async () => {
+  it("defaults to 8,000 body characters per item and 40,000 for the final JSON", async () => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
     vi.mocked(parseArticle).mockReturnValue({ ...MOCK_ARTICLE, text: "あ".repeat(20_000) });
@@ -318,10 +318,19 @@ describe("get_laws_batch tool", () => {
     });
     expect(response.results[0].text!.split("\n\n")[0]).toHaveLength(8_000);
     expect(response.results[0].text).toContain('offset=8000, max_chars=8000) で取得');
-    expect(response.omitted).toHaveLength(2);
-    expect(response.note).toContain("max_total_chars=60000");
-    expect(result.content[0].text.length).toBeLessThanOrEqual(60_000);
+    expect(response.omitted).toHaveLength(5);
+    expect(response.note).toContain("max_total_chars=40000");
+    expect(result.content[0].text.length).toBeLessThanOrEqual(40_000);
     expect(result.structuredContent).toEqual(response);
+  });
+
+  it("registers the new batch defaults and rejects per-item limits above 30,000", () => {
+    const config = mockServer.registerTool.mock.calls[0][1] as { inputSchema: z.ZodRawShape };
+    const schema = z.object(config.inputSchema);
+    const requests = [{ law_name: "建築基準法", article_number: "20" }];
+    expect(schema.parse({ requests })).toMatchObject({ max_chars_per_item: 8_000, max_total_chars: 40_000 });
+    expect(schema.safeParse({ requests, max_chars_per_item: 30_000 }).success).toBe(true);
+    expect(schema.safeParse({ requests, max_chars_per_item: 30_001 }).success).toBe(false);
   });
 
   it.each([500, 1_500])("keeps only leading whole structured paragraphs of size %i", async (size) => {

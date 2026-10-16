@@ -1,13 +1,13 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { searchKeyword } from "../lib/egov-client.js";
+import { normalizeKeyword, searchKeyword } from "../lib/egov-client.js";
 import { resolveLawId } from "../lib/law-resolver.js";
 import { LawNotFoundError } from "../lib/errors.js";
 import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
 const inputSchema = {
   keyword: z.string().max(200).describe(
-    "本文の検索語。AND/OR/NOT と *・? のワイルドカードが使用可能",
+    "本文の検索語。半角スペース区切りで AND 検索。AND・OR・NOT は演算子ではなく検索語として扱われる。全角スペースは半角に直して送る。*・? のワイルドカードが使用可能",
   ),
   law_title: z.string().max(200).optional().describe("法令名または略称で絞り込み"),
   limit: z.number().int().min(1).max(50).default(10).describe("取得する文の数（最大50）"),
@@ -35,12 +35,19 @@ export function registerSearchArticlesTool(server: McpServer): void {
     "search_articles",
     {
       title: "条文本文検索",
-      description: "条文本文をキーワードで検索する。AND/OR/NOT と *・? に対応。法令名・略称で絞り込み可能。検索結果は節名と抜粋のみで条番号は返らないため、正確な条文は get_law で確認してください。",
+      description: "条文本文をキーワードで検索する。半角スペース区切りで AND 検索。AND・OR・NOT は演算子ではなく検索語として扱われる。全角スペースは半角に直して送る。*・? のワイルドカードに対応。法令名・略称で絞り込み可能。検索結果は節名と抜粋のみで条番号は返らないため、正確な条文は get_law で確認してください。",
       inputSchema,
       outputSchema,
       annotations: TOOL_ANNOTATIONS,
     },
     wrapToolHandler("search_articles", async ({ keyword, law_title, limit, offset }) => {
+      keyword = normalizeKeyword(keyword);
+      if (!keyword) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "検索語が空です。半角スペース区切りで語を指定してください。" }],
+        };
+      }
       const resolved = law_title !== undefined
         ? await resolveLawId(law_title)
         : undefined;
@@ -82,7 +89,10 @@ export function registerSearchArticlesTool(server: McpServer): void {
         lines.push(`次の offset: ${result.next_offset}`);
       }
       if (hits.length === 0) {
-        lines.push("該当する条文本文は見つかりませんでした。");
+        lines.push(
+          "該当する条文はありませんでした。",
+          "検索語は半角スペース区切りで AND 検索します。AND・OR・NOT は演算子ではなく検索語として扱われます。",
+        );
       }
       for (const hit of hits) {
         lines.push(`- **${hit.law_title}** [${hit.position}] ${hit.text}`);

@@ -125,7 +125,9 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      if (!(error instanceof EgovApiError && error.statusCode === 400)) {
+      if (!(error instanceof EgovApiError && (
+        error.statusCode === 400 || (error.statusCode === 404 && error.egovCode)
+      ))) {
         this.onFailure();
       }
       throw error;

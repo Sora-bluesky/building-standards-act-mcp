@@ -37,7 +37,7 @@ const schema = {
     .min(1_000)
     .max(500_000)
     .default(DEFAULT_MAX_CHARS)
-    .describe("本文の最大文字数（1,000〜500,000）。省略時は100,000文字。format=text のみ適用。"),
+    .describe("本文と参照一覧（references）を合わせた最大文字数（1,000〜500,000）。省略時は100,000文字。format=text のみ適用。"),
   offset: z
     .number()
     .int()
@@ -56,6 +56,8 @@ const outputSchema = {
   offset: z.number().optional(),
   next_offset: z.number().nullable().optional(),
   truncated: z.boolean().optional(),
+  references_total: z.number().optional(),
+  references_truncated: z.boolean().optional(),
   note: z.string().optional(),
   revision_note: z.string().optional(),
   revision: z.object({
@@ -133,9 +135,23 @@ export function registerGetLawTool(server: McpServer): void {
       }
 
       const page = paginateAtLineBoundary(article.text, offset, max_chars);
-      const references = offset > 0 || page.next_offset !== null
+      const pageReferences = offset > 0 || page.next_offset !== null
         ? article.references?.filter((ref) => page.text.includes(ref.raw_text))
         : article.references;
+      let references = pageReferences;
+      if (pageReferences) {
+        let referenceChars = 2;
+        let keep = 0;
+        for (const ref of pageReferences) {
+          const candidateChars = referenceChars + JSON.stringify(ref).length + (keep > 0 ? 1 : 0);
+          if (page.text.length + candidateChars > max_chars) break;
+          referenceChars = candidateChars;
+          keep++;
+        }
+        references = pageReferences.slice(0, keep);
+      }
+      const referencesTotal = pageReferences?.length ?? 0;
+      const referencesTruncated = (references?.length ?? 0) < referencesTotal;
       const lines = [
         `【${resolved.title}】${article.article_title}`,
         article.article_caption ? article.article_caption : "",
@@ -162,6 +178,9 @@ export function registerGetLawTool(server: McpServer): void {
           lines.push(`  - [${label}] ${ref.raw_text}`);
         }
       }
+      if (referencesTruncated) {
+        lines.push(`（参照 ${referencesTotal} 件のうち ${references?.length ?? 0} 件を表示。本文が max_chars に近いため残りは省略。max_chars を小さくして取得するとページごとの参照が表示されます）`);
+      }
 
       lines.push("");
       lines.push(`出典: e-Gov法令検索（法令番号: ${resolved.law_num}）`);
@@ -185,6 +204,10 @@ export function registerGetLawTool(server: McpServer): void {
           offset: page.offset,
           next_offset: page.next_offset,
           truncated: page.next_offset !== null,
+          ...(referencesTruncated ? {
+            references_total: referencesTotal,
+            references_truncated: true,
+          } : {}),
           ...(fetched?.revision
             ? { revision: fetched.revision, revision_note: fetched.revisionNote }
             : {}),
