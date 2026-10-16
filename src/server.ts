@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SERVER_VERSION } from "./lib/version.js";
 import { registerGetLawTool } from "./tools/get-law.js";
 import { registerGetFullLawTool } from "./tools/get-full-law.js";
 import { registerSearchLawTool } from "./tools/search-law.js";
@@ -12,7 +13,6 @@ import { registerAnalyzeArticleTool } from "./tools/analyze-article.js";
 import { registerGetMetricsTool } from "./tools/get-metrics.js";
 
 const SERVER_NAME = "building-standards-act-mcp";
-const SERVER_VERSION = "1.7.0";
 
 const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタントです。
 

@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../server.js";
+import { SERVER_VERSION } from "./version.js";
 
 let clientInstance: Client | null = null;
 
@@ -8,7 +9,7 @@ async function getClient(): Promise<Client> {
   if (clientInstance) return clientInstance;
 
   const server = createServer();
-  const client = new Client({ name: "tool-invoker", version: "1.0.0" });
+  const client = new Client({ name: "tool-invoker", version: SERVER_VERSION });
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
 

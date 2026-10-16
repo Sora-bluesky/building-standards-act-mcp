@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { createCache } from "./cache.js";
+import { SERVER_VERSION } from "./version.js";
 
 const MLIT_NOTICE_URL = "https://www.mlit.go.jp/notice/";
 const EXCEL_URL_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -8,7 +9,7 @@ const REQUEST_TIMEOUT = 30_000; // 30 seconds
 
 // User-Agent for MLIT requests — some government sites block requests without it
 const MLIT_USER_AGENT =
-  "BuildingStandardsActMCP/1.5 (https://github.com/Sora-bluesky/building-standards-act-mcp)";
+  `BuildingStandardsActMCP/${SERVER_VERSION} (https://github.com/Sora-bluesky/building-standards-act-mcp)`;
 
 /** A single entry parsed from the MLIT notice Excel file. */
 export interface MlitNoticeEntry {

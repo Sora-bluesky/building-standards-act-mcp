@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { generateOpenApiSpec } from "../../src/lib/openapi-spec.js";
 import { _resetClient } from "../../src/lib/tool-invoker.js";
+import { SERVER_VERSION } from "../../src/lib/version.js";
 
 describe("openapi-spec", () => {
   beforeEach(() => {
@@ -11,7 +12,7 @@ describe("openapi-spec", () => {
     const spec = await generateOpenApiSpec("https://example.com");
     expect(spec.openapi).toBe("3.1.0");
     expect(spec.info.title).toBeTruthy();
-    expect(spec.info.version).toBe("0.5.0");
+    expect(spec.info.version).toBe(SERVER_VERSION);
   });
 
   it("uses provided baseUrl in servers", async () => {
