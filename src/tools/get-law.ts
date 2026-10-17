@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveLawId } from "../lib/law-resolver.js";
 import { fetchParsedArticle } from "../lib/article-fetcher.js";
+import { findAllMatches } from "../lib/text-find.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
 import {
   DEFAULT_MAX_CHARS,
@@ -13,6 +14,9 @@ import {
   parsedArticleSchema,
   structuredArticleSchema,
 } from "../lib/article-schemas.js";
+
+const MAX_LISTED_MATCHES = 20;
+const FIND_LINE_MARGIN = 100;
 
 const schema = {
   law_name: z
@@ -44,6 +48,12 @@ const schema = {
     .min(0)
     .default(0)
     .describe("本文の取得開始位置（0から始まる文字位置）。続きは案内された offset を指定。format=text のみ適用。"),
+  find: z
+    .string()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("この条の本文から探す語。指定すると最初の一致を含む行から本文を返し、一致位置の一覧を matches に入れる。空白は無視し、全角・半角の違いは区別しない。長い条の中の項・表の行を探すときに使い、offset を推測しない。format=text のみ適用。続きは find を外して next_offset を指定。"),
 };
 
 const outputSchema = {
@@ -56,6 +66,9 @@ const outputSchema = {
   offset: z.number().optional(),
   next_offset: z.number().nullable().optional(),
   truncated: z.boolean().optional(),
+  find: z.string().optional(),
+  matches: z.array(z.number()).optional(),
+  matches_total: z.number().optional(),
   references_total: z.number().optional(),
   references_truncated: z.boolean().optional(),
   note: z.string().optional(),
@@ -72,13 +85,13 @@ export function registerGetLawTool(server: McpServer): void {
     "get_law",
     {
       title: "条文取得",
-      description: "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。",
+      description: "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。長い条の中の項・表の行は find で探し、offset を推測しない。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
     },
     wrapToolHandler("get_law", async ({
-      law_name, article_number, format, max_chars = DEFAULT_MAX_CHARS, offset = 0,
+      law_name, article_number, format, max_chars = DEFAULT_MAX_CHARS, offset = 0, find,
     }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {
@@ -135,8 +148,23 @@ export function registerGetLawTool(server: McpServer): void {
       }
 
       const { references: articleReferences, ...articleWithoutReferences } = article;
-      const page = paginateAtLineBoundary(article.text, offset, max_chars);
-      const pageReferences = offset > 0 || page.next_offset !== null
+      const matches = find === undefined ? undefined : findAllMatches(article.text, find);
+      const match = matches?.find((item) => item.start >= offset) ?? matches?.[0];
+      const noMatch = matches?.length === 0;
+      let pageStart = offset;
+      if (match) {
+        const lineStart = article.text.lastIndexOf("\n", match.start - 1) + 1;
+        pageStart = match.end - lineStart > max_chars - FIND_LINE_MARGIN ? match.start : lineStart;
+      }
+      const page = noMatch
+        ? { text: "", total_chars: article.text.length, offset, next_offset: null }
+        : paginateAtLineBoundary(article.text, pageStart, max_chars);
+      const findInfo = matches === undefined ? {} : {
+        find,
+        matches: matches.slice(0, MAX_LISTED_MATCHES).map((item) => item.start),
+        matches_total: matches.length,
+      };
+      const pageReferences = noMatch ? undefined : page.offset > 0 || page.next_offset !== null
         ? articleReferences?.filter((ref) => page.text.includes(ref.raw_text))
         : articleReferences;
       let references = pageReferences;
@@ -153,15 +181,23 @@ export function registerGetLawTool(server: McpServer): void {
       }
       const referencesTotal = pageReferences?.length ?? 0;
       const referencesTruncated = (references?.length ?? 0) < referencesTotal;
-      const lines = [
+      const lines = noMatch ? [
+        `【${resolved.title}】${article.article_title}`,
+        `この条に『${find}』は見つかりませんでした。（本文全体 ${page.total_chars} 文字。空白を無視し、全角・半角を区別せずに探しました）`,
+      ] : [
         `【${resolved.title}】${article.article_title}`,
         article.article_caption ? article.article_caption : "",
         "",
+        ...(matches === undefined ? [] : [
+          `（『${find}』の一致 ${matches.length} 件。offset=${page.offset} から表示。一致位置: ${findInfo.matches?.join(", ")}）`,
+        ]),
         page.text,
       ].filter((line) => line !== undefined);
 
       if (page.next_offset !== null) {
-        lines.push(`（続きがあります。offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${page.total_chars} 文字）`);
+        lines.push(find === undefined
+          ? `（続きがあります。offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${page.total_chars} 文字）`
+          : `（続きがあります。find を外し offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${page.total_chars} 文字）`);
       }
 
       if (references && references.length > 0) {
@@ -205,6 +241,7 @@ export function registerGetLawTool(server: McpServer): void {
           offset: page.offset,
           next_offset: page.next_offset,
           truncated: page.next_offset !== null,
+          ...findInfo,
           ...(referencesTruncated ? {
             references_total: referencesTotal,
             references_truncated: true,
