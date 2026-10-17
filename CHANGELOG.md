@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-10-17
+
+### Changed
+
+- `get_law` lowers the default `max_chars` from 100,000 to 20,000 and the maximum from 500,000 to 24,000 for text output. The minimum remains 1,000, and `find` behavior is unchanged.
+- `get_full_law` and `get_kokuji` lower the default `max_chars` from 100,000 to 30,000 and the maximum from 500,000 to 48,000. These tools return only text; the minimum remains 1,000.
+- `get_laws_batch` lowers the default `max_total_chars` from 40,000 to 20,000 and the maximum from 100,000 to 24,000, retaining the minimum of 10,000. The maximum `max_chars_per_item` falls from 30,000 to 20,000; its default of 8,000 and minimum of 1,000 remain unchanged. Continuation hints still pass the per-item limit to `get_law`.
+- These limits keep one tool result under about 50,000 characters, counting `content` text plus `structuredContent` together, so Claude Code does not persist it to disk where agents without a shell cannot read it. Measured `get_law` totals were 40,673 characters at `max_chars=20000`, 50,725 at `max_chars=25000`, and 60,892 at `max_chars=30000`; the body appears in both response fields. Batch results likewise duplicate the JSON in text and `structuredContent`.
+- Values above the new maximums now fail input validation; they are not silently clamped.
+
 ## [1.10.0] - 2026-10-17
 
 ### Added
