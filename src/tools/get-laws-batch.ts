@@ -17,8 +17,9 @@ import type {
 
 const MAX_REQUESTS = 20;
 const DEFAULT_MAX_CHARS_PER_ITEM = 8_000;
-const DEFAULT_MAX_TOTAL_CHARS = 40_000;
-const MAX_TOTAL_CHARS_LIMIT = 100_000;
+const MAX_CHARS_PER_ITEM_LIMIT = 20_000;
+const DEFAULT_MAX_TOTAL_CHARS = 20_000;
+const MAX_TOTAL_CHARS_LIMIT = 24_000;
 
 const schema = {
   requests: z
@@ -41,16 +42,16 @@ const schema = {
     .number()
     .int()
     .min(1_000)
-    .max(30_000)
+    .max(MAX_CHARS_PER_ITEM_LIMIT)
     .default(DEFAULT_MAX_CHARS_PER_ITEM)
-    .describe("条文ごとの最大文字数（1,000〜30,000）。省略時は8,000文字。"),
+    .describe("条文ごとの最大文字数（1,000〜20,000）。省略時は8,000文字。"),
   max_total_chars: z
     .number()
     .int()
     .min(10_000)
     .max(MAX_TOTAL_CHARS_LIMIT)
     .default(DEFAULT_MAX_TOTAL_CHARS)
-    .describe("応答全体のJSONの最大文字数（10,000〜100,000）。省略時は40,000文字。超過分の本文は省略。"),
+    .describe("応答全体のJSONの最大文字数（10,000〜24,000）。省略時は20,000文字。超過分の本文は省略。"),
 };
 
 const outputSchema = {
@@ -90,7 +91,7 @@ export function registerGetLawsBatchTool(server: McpServer): void {
     "get_laws_batch",
     {
       title: "条文一括取得",
-      description: "複数の法令・条文を一括取得する。各条文をe-Govから個別に条単位取得する。最大20件。長い条（例: 建築基準法施行規則 第1条の3）は get_law で個別に取得。",
+      description: "複数の法令・条文を一括取得する。各条文をe-Govから個別に条単位取得する。最大20件。上限は、structuredContent を含む応答全体が約5万字に収まる値。長い条（例: 建築基準法施行規則 第1条の3）は get_law で個別に取得。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
       outputSchema,

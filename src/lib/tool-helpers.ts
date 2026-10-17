@@ -14,7 +14,10 @@ import {
 } from "./errors.js";
 import { EgovApiError } from "./errors.js";
 
-export const DEFAULT_MAX_CHARS = 100_000;
+export const ARTICLE_DEFAULT_MAX_CHARS = 20_000;
+export const ARTICLE_MAX_CHARS_LIMIT = 24_000;
+export const TEXT_DEFAULT_MAX_CHARS = 30_000;
+export const TEXT_MAX_CHARS_LIMIT = 48_000;
 
 function paginate(
   text: string,
