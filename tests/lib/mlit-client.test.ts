@@ -474,6 +474,34 @@ describe("mlit-client", () => {
   // -------------------------------------------------------------------------
 
   describe("Excel parsing and entry transformation", () => {
+    it("finds a canonical number and only exact unique housing titles", async () => {
+      vi.resetModules();
+      vi.stubGlobal("fetch", mockFetch);
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...MOCK_ROWS,
+        ["耐火構造の構造方法", "国住指第1号", "36676", "住宅局", "", "https://www.mlit.go.jp/notification.pdf"],
+        ["耐火構造の構造方法", "建設省告示第1号", "36676", "道路局", "", "https://www.mlit.go.jp/road.pdf"],
+        ["耐火構造の構造方法の補足", "建設省告示第2号", "36676", "住宅局", "", "https://www.mlit.go.jp/other.pdf"],
+      ]);
+      const lib = await import("../../src/lib/mlit-client.js");
+      expect((await lib.findKokujiByKey("平成12:建設省:1399"))?.title).toBe("耐火構造の構造方法を定める件");
+      expect(await lib.findKokujiByKey("平成13:建設省:1399")).toBeNull();
+      expect(await lib.findHousingKokujiByTitle(lib.normalizeKokujiTitle("耐火構造の構造方法を定める件"))).toHaveLength(1);
+      expect(await lib.findHousingKokujiByTitle("耐火構造")).toEqual([]);
+    });
+    it("restricts page text fetches to the MLIT origin and returns null on failure", async () => {
+      vi.resetModules();
+      vi.stubGlobal("fetch", mockFetch);
+      const { fetchMlitText } = await import("../../src/lib/mlit-client.js");
+      expect(await fetchMlitText("https://example.com/page")).toBeNull();
+      expect(await fetchMlitText("https://www.mlit.go.jp.evil.test/page")).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+      mockFetch.mockResolvedValue({ ok: true, text: async () => "test" });
+      expect(await fetchMlitText("https://www.mlit.go.jp/page")).toBe("test");
+      expect(mockFetch).toHaveBeenCalledWith("https://www.mlit.go.jp/page", expect.objectContaining({ headers: { "User-Agent": expect.stringContaining("BuildingStandardsActMCP/") }, redirect: "error", signal: expect.any(AbortSignal) }));
+      mockFetch.mockRejectedValue(new Error("offline"));
+      expect(await fetchMlitText("https://www.mlit.go.jp/page")).toBeNull();
+    });
     it("converts Excel date serial to YYYY-MM-DD format", async () => {
       vi.resetModules();
 

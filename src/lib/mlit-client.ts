@@ -3,6 +3,7 @@ import { expandKokujiAliases } from "../data/kokuji-term-aliases.js";
 import { formatArticleRef, parseArticleRefs, type ArticleRef } from "./article-ref.js";
 import { createCache } from "./cache.js";
 import { SERVER_VERSION } from "./version.js";
+import { kokujiKey, kokujiNumberFromDbEntry } from "./kokuji-number.js";
 
 const MLIT_NOTICE_URL = "https://www.mlit.go.jp/notice/";
 const EXCEL_URL_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -79,7 +80,13 @@ async function fetchBuffer(url: string): Promise<ArrayBuffer | null> {
 /**
  * Fetch text content from a URL with timeout and abort handling.
  */
-async function fetchText(url: string): Promise<string | null> {
+export async function fetchMlitText(url: string): Promise<string | null> {
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin !== "https://www.mlit.go.jp" || parsed.username || parsed.password) return null;
+  } catch {
+    return null;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -87,6 +94,7 @@ async function fetchText(url: string): Promise<string | null> {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: FETCH_HEADERS,
+      redirect: "error",
     });
     if (!response.ok) {
       return null;
@@ -293,7 +301,7 @@ async function getExcelUrl(): Promise<string | null> {
     return cached;
   }
 
-  const html = await fetchText(MLIT_NOTICE_URL);
+  const html = await fetchMlitText(MLIT_NOTICE_URL);
   if (!html) {
     return null;
   }
@@ -495,4 +503,21 @@ export async function searchMlitNotices(
 ): Promise<MlitNoticeEntry[]> {
   const entries = await getAllEntries();
   return entries.filter((e) => e.title.includes(keyword));
+}
+
+export function normalizeKokujiTitle(title: string): string {
+  return title.normalize("NFKC").replace(/\s/g, "").replace(/を定める件$/, "");
+}
+
+/** Exact title matching only: fuzzy search must never establish an amendment relation. */
+export async function findHousingKokujiByTitle(normalizedTitle: string): Promise<MlitNoticeEntry[]> {
+  return (await getAllEntries()).filter((entry) => entry.organization.includes("住宅局")
+    && entry.document_number.includes("告示") && normalizeKokujiTitle(entry.title) === normalizedTitle);
+}
+
+export async function findKokujiByKey(key: string): Promise<MlitNoticeEntry | null> {
+  return (await getAllEntries()).find((entry) => {
+    const number = kokujiNumberFromDbEntry(entry);
+    return number !== null && kokujiKey(number) === key;
+  }) ?? null;
 }

@@ -43,7 +43,8 @@ __pycache__/
 tasks/
 
 # === Dev-only scripts (not needed by end users) ===
-scripts/
+scripts/*
+!scripts/build-kokuji-amendment-index.mjs
 
 # === npm pack artifacts ===
 package/

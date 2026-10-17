@@ -19,6 +19,9 @@ vi.mock("../../src/lib/pdf-extractor.js", () => ({
   extractPdfText: vi.fn(),
   extractTextFromPdf: vi.fn(),
 }));
+vi.mock("../../src/lib/kokuji-amendments.js", async (original) => ({
+  ...await original<typeof import("../../src/lib/kokuji-amendments.js")>(), findAmendmentsFor: vi.fn(),
+}));
 
 import { registerGetKokujiTool } from "../../src/tools/get-kokuji.js";
 import { searchLaws, getLawData } from "../../src/lib/egov-client.js";
@@ -31,12 +34,13 @@ import {
 import { extractPdfText } from "../../src/lib/pdf-extractor.js";
 import { KokujiRegistry } from "../../src/lib/kokuji-registry.js";
 import type { KokujiPreset } from "../../src/lib/types.js";
+import { DB_NOTICE, findAmendmentsFor, unavailableAmendments } from "../../src/lib/kokuji-amendments.js";
 
 // Capture the handler registered by the tool
 let handler: Function;
 
 const mockServer = {
-  registerTool: vi.fn((_name: string, _config: { inputSchema: z.ZodRawShape }, fn: Function) => {
+  registerTool: vi.fn((_name: string, _config: { inputSchema: z.ZodRawShape; outputSchema: z.ZodRawShape }, fn: Function) => {
     handler = fn;
   }),
 };
@@ -65,6 +69,7 @@ describe("get_kokuji ツール", () => {
     vi.clearAllMocks();
     vi.mocked(findKokujiCandidates).mockReset().mockResolvedValue([]);
     vi.mocked(extractPdfText).mockReset();
+    vi.mocked(findAmendmentsFor).mockReset().mockResolvedValue({ ...unavailableAmendments(), status: "ok" });
     registerGetKokujiTool(mockServer as any);
   });
 
@@ -72,7 +77,7 @@ describe("get_kokuji ツール", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers pagination defaults and integer limits without an output schema", () => {
+  it("registers pagination defaults, integer limits, and an output schema", () => {
     const config = mockServer.registerTool.mock.calls[0][1];
     const schema = z.object(config.inputSchema);
     expect(schema.parse({ kokuji_name: "テスト告示" })).toEqual({
@@ -85,7 +90,7 @@ describe("get_kokuji ツール", () => {
       expect(schema.safeParse({ kokuji_name: "テスト告示", ...params }).success).toBe(false);
     }
     expect(schema.safeParse({ kokuji_name: "テスト告示", max_chars: 48_000, offset: 1000 }).success).toBe(true);
-    expect(config).not.toHaveProperty("outputSchema");
+    expect(config).toHaveProperty("outputSchema");
   });
 
   it("uses the default page size when pagination inputs are omitted", async () => {
@@ -94,8 +99,12 @@ describe("get_kokuji ツール", () => {
 
     const result = await handler({ kokuji_name: "テスト告示" });
     expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toContain("offset=30000");
-    expect(result).not.toHaveProperty("structuredContent");
+    expect(result.structuredContent.next_offset).toBeGreaterThan(1000);
+    expect(result.structuredContent.next_offset).toBeLessThan(30_000);
+    expect(result.content[0].text).toContain(`offset=${result.structuredContent.next_offset}`);
+    expect(result.structuredContent.text).toBe(result.content[0].text);
+    expect(result.content[0].text.length + JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(50_000);
+    expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
   });
 
   it.each(["mlit", "pdf", "egov"])("paginates the preset %s success path", async (source) => {
@@ -121,6 +130,9 @@ describe("get_kokuji ツール", () => {
     const second = await handler({ kokuji_name: preset.title, max_chars: 1000, offset: 1000 });
     expect(first.content[0].text).toBe(`${complete.slice(0, 1000)}\n\n（続きがあります。offset=1000 を指定して続きを取得してください。全体 ${complete.length} 文字）`);
     expect(second.content[0].text).toBe(complete.slice(1000));
+    expect(first.structuredContent.source).toBe(({ mlit: "mlit_db", pdf: "mlit_pdf", egov: "egov" })[source]);
+    expect(first.structuredContent.text).toBe(first.content[0].text);
+    expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(first.structuredContent).success).toBe(true);
   });
   it("registers with correct name", () => {
     expect(mockServer.registerTool).toHaveBeenCalledWith(
@@ -275,6 +287,9 @@ describe("get_kokuji ツール", () => {
     expect(result.content[0].text).toContain("e-Gov法令検索");
     expect(result.content[0].text).toContain(mockFullText);
     expect(result.content[0].text).not.toContain("国交省 DB の PDF");
+    expect(result.structuredContent).toMatchObject({ source: "egov", amendments: null, housing_bureau: false });
+    expect(result.structuredContent.text).toBe(result.content[0].text);
+    expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
 
     vi.mocked(parseFullLaw).mockReturnValue("告示本文".repeat(375));
     const complete = (await handler({ kokuji_name: "テスト告示" })).content[0].text;
@@ -331,6 +346,9 @@ describe("get_kokuji ツール", () => {
     expect(result.content[0].text).toContain("get_law");
     // getLawData should NOT have been called since nothing was found
     expect(getLawData).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({ source: "not_found", title: null, amendments: null });
+    expect(result.structuredContent.text).toBe(result.content[0].text);
+    expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
   });
 
   it("paginates MLIT text including headers and continues at offset", async () => {
@@ -338,7 +356,7 @@ describe("get_kokuji ツール", () => {
     const body = "告示本文".repeat(375);
     vi.mocked(extractPdfText).mockResolvedValue({ text: body, lastModified: null });
     const complete = [
-      "【検索結果】テスト告示", "法令番号: 建設省告示第千百号", "", body, "",
+      "【検索結果】テスト告示", "法令番号: 建設省告示第千百号", "告示番号: 昭和56年建設省告示第1100号", "", body, "",
       "※ 国交省 DB の PDF の収録時点は確認できませんでした。最新の改正は e-Gov 法令検索または官報で確認してください。",
       "",
       "出典: 国土交通省 告示・通達データベース", "",
@@ -351,7 +369,7 @@ describe("get_kokuji ツール", () => {
 
     expect(first.content[0].text).toBe(`${complete.slice(0, 1000)}\n\n（続きがあります。offset=1000 を指定して続きを取得してください。全体 ${complete.length} 文字）`);
     expect(second.content[0].text).toBe(complete.slice(1000));
-    expect(first).not.toHaveProperty("structuredContent");
+    expect(first.structuredContent).toMatchObject({ offset: 0, next_offset: 1000, total_chars: complete.length, amendments: null });
   });
 
   it("returns error on unexpected exception", async () => {
@@ -382,6 +400,7 @@ describe("get_kokuji ツール", () => {
     expect(result.content[0].text).toContain([
       `【検索結果】${match.entry.title}`,
       `法令番号: ${match.entry.document_number}`,
+      "告示番号: 昭和56年建設省告示第1100号",
       "一致: 第四十六条第四項、軸組",
       "",
       "告示本文です。",
@@ -411,5 +430,82 @@ describe("get_kokuji ツール", () => {
 
     expect(result.content[0].text).toContain("  - 構造に関する告示");
     expect(searchMlitNotices).toHaveBeenCalledWith("構造規定");
+  });
+
+  it.each([false, true])("shows housing-bureau amendments on every body page (preset=%s)", async (preset) => {
+    const match = createMatch();
+    match.entry.organization = "国土交通省住宅局建築指導課";
+    vi.mocked(findKokujiCandidates).mockResolvedValue([match]);
+    vi.mocked(extractPdfText).mockResolvedValue({ text: "本文".repeat(1500), lastModified: null });
+    if (preset) vi.spyOn(KokujiRegistry.prototype, "findByName").mockReturnValue({ title: "テスト告示", law_num: "昭和56年建設省告示第1100号", abbrev: [], delegated_by: "建築基準法" });
+    const amendments = { ...unavailableAmendments(), status: "ok" as const, items: [{ number: "令和7年国土交通省告示第976号", title: "軸組等の一部を改正する告示", promulgated_on: "2025-10-28", effective_on: "2025-10-28", effective_note: null, documents: [], matched_by: "pdf" as const }] };
+    vi.mocked(findAmendmentsFor).mockResolvedValue(amendments);
+    const full = await handler({ kokuji_name: "テスト告示" });
+    const first = await handler({ kokuji_name: "テスト告示", max_chars: 1000 });
+    const next = await handler({ kokuji_name: "テスト告示", max_chars: 1000, offset: first.structuredContent.next_offset });
+    for (const result of [full, first, next]) {
+      expect(result.content[0].text.startsWith(DB_NOTICE)).toBe(true);
+      expect(result.content[0].text).toContain("令和7年国土交通省告示第976号");
+      expect(result.structuredContent.text).toBe(result.content[0].text);
+      expect(result.structuredContent).toMatchObject({ source: "mlit_db", housing_bureau: true, db_notice: DB_NOTICE, amendments });
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    }
+    const sectionEnd = full.content[0].text.indexOf("\n\n");
+    const body = full.content[0].text.slice(sectionEnd + 2);
+    expect(first.structuredContent.next_offset).toBe(1000);
+    expect(next.content[0].text.slice(sectionEnd + 2).startsWith(body.slice(1000, 2000))).toBe(true);
+    expect(findAmendmentsFor).toHaveBeenCalledWith({ key: "昭和56:建設省:1100", title: match.entry.title });
+  });
+  it("keeps non-housing results free of amendment metadata", async () => {
+    vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch()]);
+    vi.mocked(extractPdfText).mockResolvedValue({ text: "本文", lastModified: null });
+    const result = await handler({ kokuji_name: "テスト告示" });
+    expect(result.structuredContent).toMatchObject({ amendments: null, db_notice: null, housing_bureau: false });
+    expect(findAmendmentsFor).not.toHaveBeenCalled();
+  });
+  it("keeps the body available when amendment lookup rejects", async () => {
+    const match = createMatch(); match.entry.organization = "住宅局";
+    vi.mocked(findKokujiCandidates).mockResolvedValue([match]);
+    vi.mocked(extractPdfText).mockResolvedValue({ text: "本文", lastModified: null });
+    vi.mocked(findAmendmentsFor).mockRejectedValue(new Error("unavailable"));
+    const result = await handler({ kokuji_name: "テスト告示" });
+    expect(result.content[0].text).toContain("改正一覧を取得できませんでした");
+    expect(result.content[0].text).toContain("本文");
+    expect(result.structuredContent.amendments.status).toBe("unavailable");
+  });
+  it.each(["文".repeat(25) + "\n", '"\\\t\r\n'])("budgets JSON-escaped short lines on the e-Gov fallback: %j", async (line) => {
+    vi.spyOn(KokujiRegistry.prototype, "findByName").mockReturnValue({
+      title: "テスト告示", law_num: "令和元年告示第一号", law_id: "TEST_KOKUJI",
+      abbrev: [], delegated_by: "建築基準法",
+    });
+    vi.mocked(getLawData).mockResolvedValue({
+      law_full_text: { tag: "Law", children: [] },
+    } as Awaited<ReturnType<typeof getLawData>>);
+    vi.mocked(parseFullLaw).mockReturnValue(line.repeat(20_000));
+
+    const first = await handler({ kokuji_name: "テスト告示", max_chars: 48_000 });
+    const next = await handler({ kokuji_name: "テスト告示", max_chars: 48_000, offset: first.structuredContent.next_offset });
+    for (const result of [first, next]) {
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent.source).toBe("egov");
+      expect(result.content[0].text.length + JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(50_000);
+      expect(result.structuredContent.text).toBe(result.content[0].text);
+      expect(result.structuredContent.next_offset).toBeGreaterThan(result.structuredContent.offset);
+      expect(result.content[0].text).toContain(`offset=${result.structuredContent.next_offset}`);
+    }
+    const bodyStart = first.content[0].text.indexOf("\n\n") + 2;
+    const bodyOffset = first.structuredContent.next_offset - bodyStart;
+    expect(next.content[0].text.startsWith(line.repeat(20_000).slice(bodyOffset, bodyOffset + 100))).toBe(true);
+  });
+  it("budgets text plus structured metadata below 50,000 characters", async () => {
+    const match = createMatch(); match.entry.organization = "住宅局";
+    vi.mocked(findKokujiCandidates).mockResolvedValue([match]);
+    vi.mocked(extractPdfText).mockResolvedValue({ text: "本".repeat(100_000), lastModified: null });
+    const items = Array.from({ length: 30 }, () => ({ number: "令和7年国土交通省告示第976号", title: "軸組等の一部を改正する告示".repeat(5), promulgated_on: "2025-10-28", effective_on: "2025-10-28", effective_note: null, documents: [{ label: "新旧対照表", url: "https://www.mlit.go.jp/jutakukentiku/build/content/001966676.pdf" }], matched_by: "pdf" as const }));
+    vi.mocked(findAmendmentsFor).mockResolvedValue({ ...unavailableAmendments(), status: "ok", items });
+    const result = await handler({ kokuji_name: "テスト告示", max_chars: 48_000 });
+    expect(result.content[0].text.length + JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(50_000);
+    expect(result.structuredContent.text).toBe(result.content[0].text);
+    expect(result.structuredContent.next_offset).toBeLessThan(48_000);
   });
 });

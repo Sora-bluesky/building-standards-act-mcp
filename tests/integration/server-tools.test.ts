@@ -492,7 +492,7 @@ describe("Integration: MCP Server Tools", () => {
   // ── Server basics ───────────────────────────────
 
   describe("server basics", () => {
-    it("listTools returns all 11 tools", async () => {
+    it("listTools returns all 12 tools", async () => {
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name).sort();
 
@@ -501,6 +501,7 @@ describe("Integration: MCP Server Tools", () => {
         "check_law_updates",
         "get_full_law",
         "get_kokuji",
+        "get_kokuji_amendments",
         "get_law",
         "get_laws_batch",
         "get_metrics",
@@ -511,10 +512,10 @@ describe("Integration: MCP Server Tools", () => {
       ]);
     });
 
-    it("exposes titles, read-only annotations and exactly six output schemas", async () => {
+    it("exposes titles, read-only annotations and exactly eight output schemas", async () => {
       const { tools } = await client.listTools();
 
-      expect(tools).toHaveLength(11);
+      expect(tools).toHaveLength(12);
       for (const tool of tools) {
         expect(tool.title).toBeTruthy();
         expect(tool.annotations).toMatchObject({
@@ -530,6 +531,8 @@ describe("Integration: MCP Server Tools", () => {
         .sort();
       expect(structuredTools).toEqual([
         "analyze_article",
+        "get_kokuji",
+        "get_kokuji_amendments",
         "get_law",
         "get_laws_batch",
         "get_metrics",

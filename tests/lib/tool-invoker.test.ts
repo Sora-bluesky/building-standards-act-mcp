@@ -11,9 +11,9 @@ describe("tool-invoker", () => {
   });
 
   describe("listTools", () => {
-    it("returns all 11 registered tools", async () => {
+    it("returns all 12 registered tools", async () => {
       const tools = await listTools();
-      expect(tools.length).toBe(11);
+      expect(tools.length).toBe(12);
 
       const names = tools.map((t) => t.name);
       expect(names).toContain("get_law");
@@ -21,6 +21,7 @@ describe("tool-invoker", () => {
       expect(names).toContain("search_law");
       expect(names).toContain("search_articles");
       expect(names).toContain("get_kokuji");
+      expect(names).toContain("get_kokuji_amendments");
       expect(names).toContain("check_law_updates");
       expect(names).toContain("get_laws_batch");
       expect(names).toContain("verify_citation");

@@ -5,11 +5,15 @@ import { KokujiRegistry } from "../lib/kokuji-registry.js";
 import { findKokujiCandidates, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
 import { extractPdfText, type PdfTextResult } from "../lib/pdf-extractor.js";
 import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
+import { DB_NOTICE, findAmendmentsFor, formatAmendmentsSection, unavailableAmendments, type KokujiAmendments } from "../lib/kokuji-amendments.js";
+import { kokujiAmendmentsSchema } from "../lib/kokuji-amendment-schema.js";
+import { formatKokujiNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber } from "../lib/kokuji-number.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import {
   TEXT_DEFAULT_MAX_CHARS,
   TEXT_MAX_CHARS_LIMIT,
+  RESPONSE_CHAR_BUDGET,
   paginateText,
   TOOL_ANNOTATIONS,
   wrapToolHandler,
@@ -28,7 +32,7 @@ const schema = {
     .min(1_000)
     .max(TEXT_MAX_CHARS_LIMIT)
     .default(TEXT_DEFAULT_MAX_CHARS)
-    .describe("1回に取得する最大文字数（1,000〜48,000）。省略時は30,000文字。"),
+    .describe("1回に取得する本文の最大文字数（1,000〜48,000）。省略時は30,000文字。本文を content と structuredContent.text の両方に含めるため、改正欄と構造化情報も合わせた応答全体が約50,000文字に収まるよう本文ページを減らす。"),
   offset: z
     .number()
     .int()
@@ -36,6 +40,39 @@ const schema = {
     .default(0)
     .describe("取得開始位置（0から始まる文字位置）。続きの取得時は案内された offset を指定。"),
 };
+
+const outputSchema = {
+  text: z.string(),
+  title: z.string().nullable(),
+  document_number: z.string().nullable(),
+  kokuji_number: z.string().nullable(),
+  source: z.enum(["mlit_db", "mlit_pdf", "egov", "not_found"]),
+  housing_bureau: z.boolean(),
+  db_notice: z.string().nullable(),
+  amendments: kokujiAmendmentsSchema.nullable(),
+  offset: z.number(), next_offset: z.number().nullable(), total_chars: z.number(),
+};
+type KokujiMetadata = Omit<z.infer<z.ZodObject<typeof outputSchema>>, "text" | "offset" | "next_offset" | "total_chars">;
+
+async function mlitMetadata(match: KokujiMatch): Promise<KokujiMetadata> {
+  const entry = match.entry;
+  const number = kokujiNumberFromDbEntry(entry);
+  const housing = entry.organization.includes("住宅局");
+  let amendments: KokujiAmendments | null = null;
+  if (housing) {
+    try { amendments = await findAmendmentsFor({ key: number ? kokujiKey(number) : null, title: entry.title }); }
+    catch { amendments = unavailableAmendments(); }
+  }
+  return { title: entry.title, document_number: entry.document_number,
+    kokuji_number: number ? (parseKokujiNumber(entry.document_number) ? entry.document_number.normalize("NFKC") : formatKokujiNumber(number)) : null, source: "mlit_db",
+    housing_bureau: housing, db_notice: housing ? DB_NOTICE : null, amendments };
+}
+
+function fallbackMetadata(title: string | null, documentNumber: string | null, source: KokujiMetadata["source"]): KokujiMetadata {
+  const number = documentNumber ? parseKokujiNumber(documentNumber) : null;
+  return { title, document_number: documentNumber, kokuji_number: number ? documentNumber : null,
+    source, housing_bureau: false, db_notice: null, amendments: null };
+}
 
 /** Diagnostic info collected during fetchViaMlit for error reporting. */
 interface MlitDiagnostic {
@@ -133,13 +170,34 @@ export function registerGetKokujiTool(server: McpServer): void {
       description: "建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、見つからない場合はe-Gov APIで検索を試みる。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
+      outputSchema,
     },
     wrapToolHandler("get_kokuji", async ({
       kokuji_name, max_chars = TEXT_DEFAULT_MAX_CHARS, offset = 0,
     }) => {
-      const textResult = (text: string) => ({
-        content: [{ type: "text" as const, text: paginateText(text, offset, max_chars).text }],
-      });
+      const textResult = (body: string, metadata: KokujiMetadata) => {
+        const section = metadata.amendments ? formatAmendmentsSection(metadata.amendments, { includeDbNotice: true }) : "";
+        const structuredContent = { ...metadata, offset, next_offset: null as number | null, total_chars: body.length };
+        let effectiveMaxChars = Math.max(1_000, Math.min(max_chars,
+          Math.floor((RESPONSE_CHAR_BUDGET - 2 * section.length - JSON.stringify(structuredContent).length - 500) / 2)));
+        const buildResult = (pageSize: number) => {
+          const page = paginateText(body, offset, pageSize);
+          const text = (section ? section + "\n\n" : "") + page.text;
+          return {
+            content: [{ type: "text" as const, text }],
+            structuredContent: { ...structuredContent, offset: page.offset, next_offset: page.next_offset, text },
+          };
+        };
+        let result = buildResult(effectiveMaxChars);
+        // JSON escaping adds characters that the initial estimate does not include.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const overflow = result.content[0].text.length + JSON.stringify(result.structuredContent).length - RESPONSE_CHAR_BUDGET;
+          if (overflow <= 0 || effectiveMaxChars === 1_000) break;
+          effectiveMaxChars = Math.max(1_000, effectiveMaxChars - overflow);
+          result = buildResult(effectiveMaxChars);
+        }
+        return result;
+      };
       // Step 1: Check preset registry for known kokuji
       const preset = registry.findByName(kokuji_name);
 
@@ -149,9 +207,11 @@ export function registerGetKokujiTool(server: McpServer): void {
         const mlitText = await fetchViaMlit(preset.title, diag);
 
         if (mlitText) {
+          const metadata = await mlitMetadata(mlitText.match);
           const text = [
             `【告示】${preset.title}`,
             `法令番号: ${preset.law_num}`,
+            ...(metadata.kokuji_number ? [`告示番号: ${metadata.kokuji_number}`] : []),
             `委任元: ${preset.delegated_by}`,
             "",
             mlitText.text,
@@ -165,7 +225,7 @@ export function registerGetKokujiTool(server: McpServer): void {
             "正確な条文は官報または法令集で確認してください。",
           ].join("\n");
 
-          return textResult(text);
+          return textResult(text, metadata);
         }
 
         // Step 2b: MLIT failed — try preset pdf_url if available
@@ -184,7 +244,7 @@ export function registerGetKokujiTool(server: McpServer): void {
               `出典: 国土交通省（PDF直接取得）`,
               `URL: ${preset.pdf_url}`,
             ].join("\n");
-            return textResult(text);
+            return textResult(text, fallbackMetadata(preset.title, preset.law_num, "mlit_pdf"));
           } catch (err) {
             // Update diagnostic and fall through to next fallback
             diag.pdfUrl = preset.pdf_url;
@@ -208,7 +268,7 @@ export function registerGetKokujiTool(server: McpServer): void {
               "出典: e-Gov法令検索",
             ].join("\n");
 
-            return textResult(text);
+            return textResult(text, fallbackMetadata(preset.title, preset.law_num, "egov"));
           } catch {
             // e-Gov also failed — fall through to "not found" message
           }
@@ -236,16 +296,18 @@ export function registerGetKokujiTool(server: McpServer): void {
           "ネットワーク接続を確認するか、時間をおいて再度お試しください。",
         ].join("\n");
 
-        return textResult(text);
+        return textResult(text, fallbackMetadata(preset.title, preset.law_num, "not_found"));
       }
 
       // Step 3: No preset — try MLIT search directly
       const mlitText = await fetchViaMlit(kokuji_name);
       if (mlitText) {
         const { match } = mlitText;
+        const metadata = await mlitMetadata(match);
         const text = [
           `【検索結果】${match.entry.title}`,
           `法令番号: ${match.entry.document_number}`,
+          ...(metadata.kokuji_number ? [`告示番号: ${metadata.kokuji_number}`] : []),
           ...(match.stage === "article" || match.stage === "keyword"
             ? [`一致: ${match.matched.join("、")}`]
             : []),
@@ -260,7 +322,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "国土交通省の告示データベースから検索して取得しました。",
         ].join("\n");
 
-        return textResult(text);
+        return textResult(text, metadata);
       }
 
       // Step 4: MLIT not found — try e-Gov API as final fallback
@@ -277,7 +339,7 @@ export function registerGetKokujiTool(server: McpServer): void {
           "※ この告示はプリセットに含まれていないため、検索結果から取得しました。",
         ].join("\n");
 
-        return textResult(text);
+        return textResult(text, fallbackMetadata(egovResult.title, egovResult.lawNum, "egov"));
       }
 
       // Nothing found anywhere — suggest similar entries from MLIT database
@@ -321,7 +383,7 @@ export function registerGetKokujiTool(server: McpServer): void {
         ...suggestionLines,
       ].join("\n");
 
-      return textResult(text);
+      return textResult(text, fallbackMetadata(null, null, "not_found"));
     }),
   );
 }

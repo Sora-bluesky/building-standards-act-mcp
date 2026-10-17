@@ -18,6 +18,7 @@ export const ARTICLE_DEFAULT_MAX_CHARS = 20_000;
 export const ARTICLE_MAX_CHARS_LIMIT = 24_000;
 export const TEXT_DEFAULT_MAX_CHARS = 30_000;
 export const TEXT_MAX_CHARS_LIMIT = 48_000;
+export const RESPONSE_CHAR_BUDGET = 50_000;
 
 function paginate(
   text: string,
