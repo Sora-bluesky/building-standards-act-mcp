@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-10-17
+
+### Added
+
+- `get_kokuji` now lists the notices that amended the returned notice, for notices from the MLIT housing bureau. The list comes from MLIT's page on new and amended building notices (notices promulgated since 2018-01-01). The response also warns that the MLIT notice DB does not reflect building-notice amendments from March 2019 on. The list appears on every page; `offset` still points into the notice text.
+- `get_kokuji` now returns `structuredContent` (new `outputSchema`). It carries `amendments`, the notice number, and `text`, a copy of the text content, so clients that read only `structuredContent` still get the notice text. Because the text is sent twice, the page shrinks so the whole response stays around 50,000 characters (measured maximum: 49,665). A long notice now comes in pages of about 21,000 to 24,000 characters even when `max_chars` is 30,000 or more.
+- New tool `get_kokuji_amendments` returns only the amendment list, by notice number (`平12建告1399` also works) or by name. Checking amendments should not cost the 30,000 characters of notice text that `get_kokuji` returns by default.
+- `npm run build:kokuji-index` reads the amendment PDFs and writes `src/data/kokuji-amendment-index.ts`, which maps each amending notice to the notices it amends, replaces, or repeals. Which notices an amendment changed never changes later, so the index is committed. Notices are keyed by era, year, ministry, and number, because numbering restarted when the era changed in 2019. Targets listed on the MLIT page, except the notice's own number, are always kept, and a notice whose PDF does not show all of them is marked incomplete. Notices added to the MLIT page after the index was built are read from their PDFs at run time (up to 5 PDFs per refresh; the result is cached for 24 hours). Notices whose targets could not be confirmed are counted in the response, not guessed (5 of 158 at build time).
+
 ## [1.10.1] - 2026-10-17
 
 ### Changed
