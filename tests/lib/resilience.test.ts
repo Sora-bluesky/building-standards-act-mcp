@@ -110,6 +110,24 @@ describe("CircuitBreaker", () => {
     expect(cb.getState()).toBe("closed");
   });
 
+  it.each(["404001", "404004"])("does not count HTTP 404 with code %s as a failure", async (code) => {
+    const error = new EgovApiError("not found", 404, "/test", code);
+    for (let i = 0; i < 6; i++) {
+      await expect(cb.execute(async () => { throw error; })).rejects.toBe(error);
+    }
+    expect(cb.getState()).toBe("closed");
+    await expect(cb.execute(async () => "ok")).resolves.toBe("ok");
+  });
+
+  it.each([404, 500, 429, undefined])("counts HTTP %s without an application code as a failure", async (status) => {
+    const error = new EgovApiError("failed", status, "/test");
+    for (let i = 0; i < 3; i++) {
+      await expect(cb.execute(async () => { throw error; })).rejects.toBe(error);
+    }
+    expect(cb.getState()).toBe("open");
+    await expect(cb.execute(async () => "ok")).rejects.toThrow("サーキットブレーカー");
+  });
+
   it("opens after failure threshold", async () => {
     const fail = async () => {
       throw new Error("fail");

@@ -4,8 +4,12 @@ import { registerSearchArticlesTool } from "../../src/tools/search-articles.js";
 import { searchKeyword } from "../../src/lib/egov-client.js";
 import { resolveLawId } from "../../src/lib/law-resolver.js";
 import type { EgovKeywordResponse } from "../../src/lib/types.js";
+import { EgovApiError } from "../../src/lib/errors.js";
 
-vi.mock("../../src/lib/egov-client.js", () => ({ searchKeyword: vi.fn() }));
+vi.mock("../../src/lib/egov-client.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-client.js")>(),
+  searchKeyword: vi.fn(),
+}));
 vi.mock("../../src/lib/law-resolver.js", () => ({ resolveLawId: vi.fn() }));
 
 const response: EgovKeywordResponse = {
@@ -58,9 +62,40 @@ describe("search_articles", () => {
     vi.mocked(searchKeyword).mockResolvedValue({ total_count: 0, sentence_count: 0, next_offset: null, items: [] });
     const result = await handler({ keyword: "no-match", limit: 10, offset: 0 });
     expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toMatchObject({ hits: [], next_offset: null });
-    expect(result.content[0].text).toContain("見つかりませんでした");
+    expect(result.structuredContent).toMatchObject({ keyword: "no-match", total_count: 0, sentence_count: 0, hits: [], next_offset: null });
+    expect(result.content[0].text).toContain("該当する条文はありませんでした。");
+    expect(result.content[0].text).toContain("半角スペース区切りで AND 検索");
+    expect(result.content[0].text).toContain("AND・OR・NOT は演算子ではなく検索語として扱われます");
+    expect(result.content[0].text).not.toContain("通信中にエラー");
     expect(result.content[0].text).not.toContain("次の offset");
+  });
+
+  it.each([
+    ["　準耐火構造　　外壁 \t\n", "準耐火構造 外壁"],
+    [" 耐火構造　 AND  外壁 ", "耐火構造 AND 外壁"],
+  ])("normalizes %j before searching and echoing it", async (keyword, expected) => {
+    const result = await handler({ keyword, limit: 10, offset: 0 });
+    expect(searchKeyword).toHaveBeenCalledWith({ keyword: expected, lawNum: undefined, limit: 10, offset: 0 });
+    expect(result.structuredContent?.keyword).toBe(expected);
+    expect(result.content[0].text).toContain(`## 条文本文検索結果「${expected}」`);
+  });
+
+  it.each(["", "　 \t\n"])("rejects an empty normalized keyword %j before any API call", async (keyword) => {
+    const result = await handler({ keyword, law_title: "建基法", limit: 10, offset: 0 });
+    expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
+    expect(result.content[0].text).toContain("検索語が空です。半角スペース区切りで語を指定してください。");
+    expect(searchKeyword).not.toHaveBeenCalled();
+    expect(resolveLawId).not.toHaveBeenCalled();
+  });
+
+  it("keeps communication errors distinct from zero hits", async () => {
+    vi.mocked(searchKeyword).mockRejectedValue(new EgovApiError("server error", 500));
+    const result = await handler({ keyword: "耐火構造", limit: 10, offset: 0 });
+    expect(result.isError).toBe(true);
+    expect(result).not.toHaveProperty("structuredContent");
+    expect(result.content[0].text).toContain("通信中にエラー");
+    expect(result.content[0].text).not.toContain("該当する条文はありませんでした");
   });
 
   it.each([0, 1])("returns an explicit null offset when next_offset is undefined with %i hits", async (totalCount) => {

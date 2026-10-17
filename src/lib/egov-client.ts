@@ -65,7 +65,7 @@ async function fetchJsonRaw<T>(url: string): Promise<T> {
 
     if (!response.ok) {
       let egovCode: string | undefined;
-      if (response.status === 400) {
+      if (response.status === 400 || response.status === 404) {
         try {
           const body: unknown = await response.json();
           if (
@@ -199,6 +199,10 @@ export function getLawDataByRevision(
   return getLawData(revisionId);
 }
 
+export function normalizeKeyword(keyword: string): string {
+  return keyword.replace(/\s+/g, " ").trim();
+}
+
 /** Search article text, with pagination measured in sentences. */
 export async function searchKeyword(params: {
   keyword: string;
@@ -208,7 +212,7 @@ export async function searchKeyword(params: {
   sentenceTextSize?: number;
 }): Promise<EgovKeywordResponse> {
   const query = new URLSearchParams({
-    keyword: params.keyword,
+    keyword: normalizeKeyword(params.keyword),
     limit: String(params.limit),
     offset: String(params.offset),
     sentence_text_size: String(params.sentenceTextSize ?? 200),
@@ -219,9 +223,15 @@ export async function searchKeyword(params: {
   const cached = keywordCache.get(cacheKey);
   recordCacheHit("keyword", !!cached);
   if (cached) return cached;
-  const result = await fetchJson<EgovKeywordResponse>(
-    `${BASE_URL}/keyword?${cacheKey}`,
-  );
+  let result: EgovKeywordResponse;
+  try {
+    result = await fetchJson<EgovKeywordResponse>(`${BASE_URL}/keyword?${cacheKey}`);
+  } catch (error) {
+    if (!(error instanceof EgovApiError && error.statusCode === 404 && error.egovCode === "404001")) {
+      throw error;
+    }
+    result = { total_count: 0, sentence_count: 0, next_offset: null, items: [] };
+  }
   result.next_offset = result.next_offset ?? null;
   keywordCache.set(cacheKey, result);
   return result;
