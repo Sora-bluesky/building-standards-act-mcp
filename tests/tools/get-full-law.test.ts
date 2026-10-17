@@ -35,7 +35,7 @@ const mockServer = {
   }),
 };
 
-describe("get_full_law tool", () => {
+describe("get_full_law ツール", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     registerGetFullLawTool(mockServer as any);
@@ -55,15 +55,15 @@ describe("get_full_law tool", () => {
     const config = mockServer.registerTool.mock.calls[0][1];
     const schema = z.object(config.inputSchema);
     expect(schema.parse({ law_name: "建築基準法" })).toEqual({
-      law_name: "建築基準法", max_chars: 100_000, offset: 0,
+      law_name: "建築基準法", max_chars: 30_000, offset: 0,
     });
     for (const params of [
-      { max_chars: 999 }, { max_chars: 500_001 }, { max_chars: 1000.5 },
+      { max_chars: 999 }, { max_chars: 48_001 }, { max_chars: 1000.5 },
       { offset: -1 }, { offset: 0.5 },
     ]) {
       expect(schema.safeParse({ law_name: "建築基準法", ...params }).success).toBe(false);
     }
-    expect(schema.safeParse({ law_name: "建築基準法", max_chars: 500_000, offset: 1000 }).success).toBe(true);
+    expect(schema.safeParse({ law_name: "建築基準法", max_chars: 48_000, offset: 1000 }).success).toBe(true);
     expect(config).not.toHaveProperty("outputSchema");
   });
 
@@ -130,9 +130,9 @@ describe("get_full_law tool", () => {
     vi.mocked(getLawData).mockResolvedValue({
       law_full_text: { tag: "Law", children: [] },
     } as Awaited<ReturnType<typeof getLawData>>);
-    vi.mocked(parseFullLaw).mockReturnValue("文".repeat(100_001));
+    vi.mocked(parseFullLaw).mockReturnValue("文".repeat(30_001));
     const result = await handler({ law_name: "建築基準法" });
-    expect(result.content[0].text).toContain("offset=100000");
+    expect(result.content[0].text).toContain("offset=30000");
   });
 
   it("returns error on API failure", async () => {

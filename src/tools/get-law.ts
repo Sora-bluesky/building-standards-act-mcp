@@ -5,7 +5,8 @@ import { fetchParsedArticle } from "../lib/article-fetcher.js";
 import { findAllMatches } from "../lib/text-find.js";
 import { LawNotFoundError, ArticleNotFoundError } from "../lib/errors.js";
 import {
-  DEFAULT_MAX_CHARS,
+  ARTICLE_DEFAULT_MAX_CHARS,
+  ARTICLE_MAX_CHARS_LIMIT,
   paginateAtLineBoundary,
   TOOL_ANNOTATIONS,
   wrapToolHandler,
@@ -39,9 +40,9 @@ const schema = {
     .number()
     .int()
     .min(1_000)
-    .max(500_000)
-    .default(DEFAULT_MAX_CHARS)
-    .describe("本文と参照一覧（references）を合わせた最大文字数（1,000〜500,000）。省略時は100,000文字。format=text のみ適用。"),
+    .max(ARTICLE_MAX_CHARS_LIMIT)
+    .default(ARTICLE_DEFAULT_MAX_CHARS)
+    .describe("本文と参照一覧（references）を合わせた最大文字数（1,000〜24,000）。省略時は20,000文字。format=text のみ適用。"),
   offset: z
     .number()
     .int()
@@ -85,13 +86,13 @@ export function registerGetLawTool(server: McpServer): void {
     "get_law",
     {
       title: "条文取得",
-      description: "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。長い条の中の項・表の行は find で探し、offset を推測しない。",
+      description: "条番号を指定して法令の条文を取得する。附則・別表にも対応。略称・正式名称のいずれでも指定可能。format=structured で条→項→号の階層構造をJSON形式で取得可能。format=text の上限は、structuredContent を含む応答全体が約5万字に収まる値。長い条の中の項・表の行は find で探し、offset を推測しない。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
     },
     wrapToolHandler("get_law", async ({
-      law_name, article_number, format, max_chars = DEFAULT_MAX_CHARS, offset = 0, find,
+      law_name, article_number, format, max_chars = ARTICLE_DEFAULT_MAX_CHARS, offset = 0, find,
     }) => {
       const resolved = await resolveLawId(law_name);
       if (!resolved) {

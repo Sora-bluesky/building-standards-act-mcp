@@ -60,7 +60,7 @@ function createMatch(
   };
 }
 
-describe("get_kokuji tool", () => {
+describe("get_kokuji ツール", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(findKokujiCandidates).mockReset().mockResolvedValue([]);
@@ -76,15 +76,26 @@ describe("get_kokuji tool", () => {
     const config = mockServer.registerTool.mock.calls[0][1];
     const schema = z.object(config.inputSchema);
     expect(schema.parse({ kokuji_name: "テスト告示" })).toEqual({
-      kokuji_name: "テスト告示", max_chars: 100_000, offset: 0,
+      kokuji_name: "テスト告示", max_chars: 30_000, offset: 0,
     });
     for (const params of [
-      { max_chars: 999 }, { max_chars: 500_001 }, { max_chars: 1000.5 },
+      { max_chars: 999 }, { max_chars: 48_001 }, { max_chars: 1000.5 },
       { offset: -1 }, { offset: 0.5 },
     ]) {
       expect(schema.safeParse({ kokuji_name: "テスト告示", ...params }).success).toBe(false);
     }
+    expect(schema.safeParse({ kokuji_name: "テスト告示", max_chars: 48_000, offset: 1000 }).success).toBe(true);
     expect(config).not.toHaveProperty("outputSchema");
+  });
+
+  it("uses the default page size when pagination inputs are omitted", async () => {
+    vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch()]);
+    vi.mocked(extractPdfText).mockResolvedValue({ text: "文".repeat(30_001), lastModified: null });
+
+    const result = await handler({ kokuji_name: "テスト告示" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("offset=30000");
+    expect(result).not.toHaveProperty("structuredContent");
   });
 
   it.each(["mlit", "pdf", "egov"])("paginates the preset %s success path", async (source) => {

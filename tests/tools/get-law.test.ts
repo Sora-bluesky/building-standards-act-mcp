@@ -49,7 +49,7 @@ const mockServer = {
   }),
 };
 
-describe("get_law tool", () => {
+describe("get_law ツール", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     registerGetLawTool(mockServer as any);
@@ -342,23 +342,39 @@ describe("get_law tool", () => {
     expect(pages.join("")).toBe(text);
   });
 
-  it("caps the default text body at 100,000 characters", async () => {
+  it("registers the article default and validates the character bounds", () => {
+    const config = mockServer.registerTool.mock.calls[0][1] as { inputSchema: z.ZodRawShape };
+    const schema = z.object(config.inputSchema);
+    const params = { law_name: "建築基準法", article_number: "20" };
+    expect(schema.parse(params)).toMatchObject({ max_chars: 20_000, offset: 0, format: "text" });
+    expect(schema.safeParse({ ...params, max_chars: 1_000 }).success).toBe(true);
+    expect(schema.safeParse({ ...params, max_chars: 24_000 }).success).toBe(true);
+    for (const max_chars of [999, 24_001, 1000.5]) {
+      expect(schema.safeParse({ ...params, max_chars }).success).toBe(false);
+    }
+  });
+
+  it.each([
+    { max_chars: undefined, expected: 20_000 },
+    { max_chars: 24_000, expected: 24_000 },
+  ])("caps the text body at $expected characters", async ({ max_chars, expected }) => {
     vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
     vi.mocked(getLawArticle).mockResolvedValue({
       law_full_text: { tag: "Law", children: [] },
     } as any);
     vi.mocked(parseArticle).mockReturnValue({
-      article_num: "20", article_title: "第二十条", article_caption: "", text: "あ".repeat(100_500),
+      article_num: "20", article_title: "第二十条", article_caption: "", text: "あ".repeat(24_500),
     });
 
-    const result = await handler({ law_name: "建築基準法", article_number: "20" });
-    expect(result.structuredContent.article.text).toHaveLength(100_000);
+    const result = await handler({ law_name: "建築基準法", article_number: "20", max_chars });
+    expect(result.structuredContent.article.text).toHaveLength(expected);
     expect(result.structuredContent).toMatchObject({
-      total_chars: 100_500, offset: 0, next_offset: 100_000, truncated: true,
+      total_chars: 24_500, offset: 0, next_offset: expected, truncated: true,
     });
+    expect(result.content[0].text.length + JSON.stringify(result.structuredContent, null, 2).length).toBeLessThan(50_000);
   });
 
-  describe("find", () => {
+  describe("条文内検索（find）", () => {
     beforeEach(() => {
       vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
       vi.mocked(getLawArticle).mockResolvedValue({

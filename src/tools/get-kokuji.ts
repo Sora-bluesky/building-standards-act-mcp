@@ -8,7 +8,8 @@ import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import {
-  DEFAULT_MAX_CHARS,
+  TEXT_DEFAULT_MAX_CHARS,
+  TEXT_MAX_CHARS_LIMIT,
   paginateText,
   TOOL_ANNOTATIONS,
   wrapToolHandler,
@@ -25,9 +26,9 @@ const schema = {
     .number()
     .int()
     .min(1_000)
-    .max(500_000)
-    .default(DEFAULT_MAX_CHARS)
-    .describe("1回に取得する最大文字数（1,000〜500,000）。省略時は100,000文字。"),
+    .max(TEXT_MAX_CHARS_LIMIT)
+    .default(TEXT_DEFAULT_MAX_CHARS)
+    .describe("1回に取得する最大文字数（1,000〜48,000）。省略時は30,000文字。"),
   offset: z
     .number()
     .int()
@@ -134,7 +135,7 @@ export function registerGetKokujiTool(server: McpServer): void {
       annotations: TOOL_ANNOTATIONS,
     },
     wrapToolHandler("get_kokuji", async ({
-      kokuji_name, max_chars = DEFAULT_MAX_CHARS, offset = 0,
+      kokuji_name, max_chars = TEXT_DEFAULT_MAX_CHARS, offset = 0,
     }) => {
       const textResult = (text: string) => ({
         content: [{ type: "text" as const, text: paginateText(text, offset, max_chars).text }],
