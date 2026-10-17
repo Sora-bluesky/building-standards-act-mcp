@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findBestMatch } from "../lib/best-match.js";
 import { KokujiRegistry } from "../lib/kokuji-registry.js";
-import { findKokujiCandidates, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
+import { findKokujiCandidates, findKokujiEntriesByKey, normalizeKokujiTitle, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
 import { extractPdfText, type PdfTextResult } from "../lib/pdf-extractor.js";
 import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
 import { DB_NOTICE, findAmendmentsFor, formatAmendmentsSection, unavailableAmendments, type KokujiAmendments } from "../lib/kokuji-amendments.js";
@@ -25,7 +25,7 @@ const schema = {
   kokuji_name: z
     .string()
     .max(200)
-    .describe("告示名（例: 耐火構造の構造方法を定める件、不燃材料を定める件）"),
+    .describe("告示名または告示番号（例: 耐火構造の構造方法を定める件、平成28年国土交通省告示第696号、平28国交告696）。番号が国交省 DB にない場合は、その旨を返す。"),
   max_chars: z
     .number()
     .int()
@@ -43,6 +43,7 @@ const schema = {
 
 const outputSchema = {
   text: z.string(),
+  found: z.boolean(),
   title: z.string().nullable(),
   document_number: z.string().nullable(),
   kokuji_number: z.string().nullable(),
@@ -52,7 +53,7 @@ const outputSchema = {
   amendments: kokujiAmendmentsSchema.nullable(),
   offset: z.number(), next_offset: z.number().nullable(), total_chars: z.number(),
 };
-type KokujiMetadata = Omit<z.infer<z.ZodObject<typeof outputSchema>>, "text" | "offset" | "next_offset" | "total_chars">;
+type KokujiMetadata = Omit<z.infer<z.ZodObject<typeof outputSchema>>, "text" | "found" | "offset" | "next_offset" | "total_chars">;
 
 async function mlitMetadata(match: KokujiMatch): Promise<KokujiMetadata> {
   const entry = match.entry;
@@ -167,7 +168,7 @@ export function registerGetKokujiTool(server: McpServer): void {
     "get_kokuji",
     {
       title: "告示取得",
-      description: "建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、見つからない場合はe-Gov APIで検索を試みる。",
+      description: "告示名または告示番号（例: 平成28年国土交通省告示第696号、平28国交告696）から、建築基準法が技術基準を委任している告示の全文を取得する。国土交通省の告示データベース（PDF）から取得し、告示名で見つからない場合はe-Gov APIで検索を試みる。番号が国交省 DB にない場合は、その旨を返す。",
       inputSchema: schema,
       annotations: TOOL_ANNOTATIONS,
       outputSchema,
@@ -177,7 +178,7 @@ export function registerGetKokujiTool(server: McpServer): void {
     }) => {
       const textResult = (body: string, metadata: KokujiMetadata) => {
         const section = metadata.amendments ? formatAmendmentsSection(metadata.amendments, { includeDbNotice: true }) : "";
-        const structuredContent = { ...metadata, offset, next_offset: null as number | null, total_chars: body.length };
+        const structuredContent = { ...metadata, found: metadata.source !== "not_found", offset, next_offset: null as number | null, total_chars: body.length };
         let effectiveMaxChars = Math.max(1_000, Math.min(max_chars,
           Math.floor((RESPONSE_CHAR_BUDGET - 2 * section.length - JSON.stringify(structuredContent).length - 500) / 2)));
         const buildResult = (pageSize: number) => {
@@ -198,6 +199,54 @@ export function registerGetKokujiTool(server: McpServer): void {
         }
         return result;
       };
+      const parsed = parseKokujiNumber(kokuji_name);
+      if (parsed) {
+        const number = formatKokujiNumber(parsed);
+        const { available, entries } = await findKokujiEntriesByKey(kokujiKey(parsed));
+        const notFound = { ...fallbackMetadata(null, null, "not_found"), kokuji_number: number };
+        if (!available) {
+          return textResult(`国交省の告示 DB を取得できませんでした。時間をおいて再度お試しください。\n告示番号: ${number}`, notFound);
+        }
+        if (entries.length === 0) {
+          return textResult(`この番号の告示は国交省 DB にありません: ${number}\n告示名で get_kokuji を呼ぶか、e-Gov 法令検索・官報で確認してください。`, notFound);
+        }
+        if (new Set(entries.map((entry) => normalizeKokujiTitle(entry.title))).size > 1) {
+          return textResult([
+            `この番号には複数の告示があります: ${number}`,
+            ...entries.map((entry) => `  - ${entry.title}・${entry.document_number}・${entry.date}`),
+            "告示名で get_kokuji を呼び直してください。",
+          ].join("\n"), notFound);
+        }
+        const [entry] = [...entries].sort((a, b) => Number(/\.pdf$/i.test(b.pdf_url)) - Number(/\.pdf$/i.test(a.pdf_url))
+          || Number(b.organization.includes("住宅局")) - Number(a.organization.includes("住宅局")));
+        let pdf: PdfTextResult;
+        try {
+          pdf = await extractPdfText(entry.pdf_url);
+          if (!pdf.text) throw new Error("PDF から本文を抽出できませんでした");
+        } catch (err) {
+          return textResult([
+            `【告示】${entry.title}`, `法令番号: ${entry.document_number}`, `告示番号: ${number}`, "",
+            "告示本文の取得に失敗しました。",
+            `PDF URL: ${entry.pdf_url}`,
+            `原因: ${err instanceof Error ? err.message : "PDF テキスト抽出に失敗"}`,
+          ].join("\n"), { ...notFound, title: entry.title, document_number: entry.document_number });
+        }
+        const match: KokujiMatch = { entry, stage: "number", matched: [number], score: 1 };
+        const metadata = await mlitMetadata(match);
+        return textResult([
+          `【告示】${entry.title}`,
+          `法令番号: ${entry.document_number}`,
+          `告示番号: ${metadata.kokuji_number}`,
+          "",
+          pdf.text,
+          "",
+          ...pdfCurrencyLines(pdf),
+          "",
+          "出典: 国土交通省 告示・通達データベース",
+          `URL: ${entry.pdf_url}`,
+        ].join("\n"), metadata);
+      }
+
       // Step 1: Check preset registry for known kokuji
       const preset = registry.findByName(kokuji_name);
 

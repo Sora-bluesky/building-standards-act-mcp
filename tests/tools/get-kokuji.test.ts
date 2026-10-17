@@ -10,9 +10,11 @@ vi.mock("../../src/lib/egov-parser.js", () => ({
   parseArticle: vi.fn(),
   parseFullLaw: vi.fn(),
 }));
-vi.mock("../../src/lib/mlit-client.js", () => ({
+vi.mock("../../src/lib/mlit-client.js", async (original) => ({
   findKokujiPdfUrl: vi.fn(),
   findKokujiCandidates: vi.fn(),
+  findKokujiEntriesByKey: vi.fn(),
+  normalizeKokujiTitle: (await original<typeof import("../../src/lib/mlit-client.js")>()).normalizeKokujiTitle,
   searchMlitNotices: vi.fn(),
 }));
 vi.mock("../../src/lib/pdf-extractor.js", () => ({
@@ -28,6 +30,7 @@ import { searchLaws, getLawData } from "../../src/lib/egov-client.js";
 import { parseFullLaw } from "../../src/lib/egov-parser.js";
 import {
   findKokujiCandidates,
+  findKokujiEntriesByKey,
   searchMlitNotices,
   type KokujiMatch,
 } from "../../src/lib/mlit-client.js";
@@ -68,6 +71,7 @@ describe("get_kokuji ツール", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(findKokujiCandidates).mockReset().mockResolvedValue([]);
+    vi.mocked(findKokujiEntriesByKey).mockReset().mockResolvedValue({ available: true, entries: [] });
     vi.mocked(extractPdfText).mockReset();
     vi.mocked(findAmendmentsFor).mockReset().mockResolvedValue({ ...unavailableAmendments(), status: "ok" });
     registerGetKokujiTool(mockServer as any);
@@ -93,12 +97,138 @@ describe("get_kokuji ツール", () => {
     expect(config).toHaveProperty("outputSchema");
   });
 
+  describe("notice number input", () => {
+    const entry = {
+      title: "特別避難階段の階段室又は付室の構造方法を定める件",
+      document_number: "国土交通省告示第六百九十六号", date: "2016-04-22",
+      organization: "国土交通省住宅局建築指導課", pdf_url: "https://www.mlit.go.jp/notice/696.pdf",
+    };
+    const number = "平成28年国土交通省告示第696号";
+
+    beforeEach(() => {
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [entry] });
+      vi.mocked(extractPdfText).mockResolvedValue({ text: "告示本文です。", lastModified: "2024-09-11" });
+    });
+
+    afterEach(() => {
+      expect(findKokujiCandidates).not.toHaveBeenCalled();
+      expect(searchLaws).not.toHaveBeenCalled();
+      expect(searchMlitNotices).not.toHaveBeenCalled();
+    });
+
+    it.each([number, "平成二十八年国土交通省告示第六百九十六号", "平28国交告696"])("fetches the exact notice for %s before checking presets", async (query) => {
+      const presetLookup = vi.spyOn(KokujiRegistry.prototype, "findByName");
+      const result = await handler({ kokuji_name: query });
+      expect(findKokujiEntriesByKey).toHaveBeenCalledWith("平成28:国土交通省:696");
+      expect(presetLookup).not.toHaveBeenCalled();
+      expect(extractPdfText).toHaveBeenCalledExactlyOnceWith(entry.pdf_url);
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        found: true, title: entry.title, document_number: entry.document_number, kokuji_number: number,
+        source: "mlit_db", housing_bureau: true, db_notice: DB_NOTICE,
+      });
+      expect(result.content[0].text).toContain([
+        `【告示】${entry.title}`, `法令番号: ${entry.document_number}`, `告示番号: ${number}`, "", "告示本文です。",
+      ].join("\n"));
+      expect(result.content[0].text).toContain("※ 国交省 DB の PDF 更新日: 2024-09-11");
+      expect(result.content[0].text).toContain("出典: 国土交通省 告示・通達データベース");
+      expect(findAmendmentsFor).toHaveBeenCalledWith({ key: "平成28:国土交通省:696", title: entry.title });
+      expect(result.structuredContent.text).toBe(result.content[0].text);
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it("resolves the construction-ministry number through the same exact path", async () => {
+      const construction = { ...entry, title: "耐火構造の構造方法を定める件", document_number: "建設省告示第千三百九十九号", date: "2000-05-30", pdf_url: "https://www.mlit.go.jp/notice/1399.pdf" };
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [construction] });
+      const result = await handler({ kokuji_name: "平成12年建設省告示第1399号" });
+      expect(findKokujiEntriesByKey).toHaveBeenCalledWith("平成12:建設省:1399");
+      expect(extractPdfText).toHaveBeenCalledExactlyOnceWith(construction.pdf_url);
+      expect(result.structuredContent).toMatchObject({ found: true, title: construction.title, kokuji_number: "平成12年建設省告示第1399号" });
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it("reports a number absent from the database without falling back to title search", async () => {
+      const missing = "平成13年国土交通省告示第1113号";
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [] });
+      const result = await handler({ kokuji_name: missing });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ found: false, source: "not_found", title: null, kokuji_number: missing });
+      expect(result.content[0].text.startsWith(`この番号の告示は国交省 DB にありません: ${missing}`)).toBe(true);
+      expect(result.content[0].text).toContain("告示名で get_kokuji を呼ぶか、e-Gov 法令検索・官報で確認してください");
+      expect(extractPdfText).not.toHaveBeenCalled();
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it("distinguishes database unavailability from an absent number", async () => {
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: false, entries: [] });
+      const result = await handler({ kokuji_name: number });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ found: false, source: "not_found", title: null, kokuji_number: number });
+      expect(result.content[0].text).toContain("国交省の告示 DB を取得できませんでした。時間をおいて再度お試しください。");
+      expect(result.content[0].text).toContain(number);
+      expect(extractPdfText).not.toHaveBeenCalled();
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it("lists distinct titles for an ambiguous number without choosing a PDF", async () => {
+      const entries = [
+        { ...entry, title: "海事局の告示", document_number: "国土交通省告示第千三百九十号", date: "2024-11-01", organization: "海事局" },
+        { ...entry, title: "別の海事局の告示", document_number: "国土交通省告示第千三百九十号", date: "2024-11-02", organization: "海事局" },
+      ];
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries });
+      const result = await handler({ kokuji_name: "令和6年国土交通省告示第1390号" });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ found: false, source: "not_found", title: null, kokuji_number: "令和6年国土交通省告示第1390号" });
+      for (const candidate of entries) expect(result.content[0].text).toContain(`${candidate.title}・${candidate.document_number}・${candidate.date}`);
+      expect(result.content[0].text).toContain("告示名で get_kokuji を呼び直してください");
+      expect(extractPdfText).not.toHaveBeenCalled();
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it.each(["pdf", "housing", "order", "normalized"])("selects duplicate rows by %s preference", async (preference) => {
+      let entries = [
+        { ...entry, pdf_url: "https://www.mlit.go.jp/notice/first.pdf" },
+        { ...entry, pdf_url: "https://www.mlit.go.jp/notice/second.PDF" },
+      ];
+      let expected = entries[0];
+      if (preference === "pdf") {
+        entries[0].pdf_url = "https://www.mlit.go.jp/notice/first.html";
+        entries[1].organization = "海事局";
+        expected = entries[1];
+      } else if (preference === "housing") {
+        entries[0].organization = "海事局";
+        expected = entries[1];
+      } else if (preference === "normalized") {
+        entries = [entries[0], { ...entries[1], title: "　特別避難階段の階段室又は付室の構造方法　" }];
+      }
+      vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries });
+      const result = await handler({ kokuji_name: number });
+      expect(result.structuredContent).toMatchObject({ found: true, title: expected.title, kokuji_number: number });
+      expect(extractPdfText).toHaveBeenCalledExactlyOnceWith(expected.pdf_url);
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+
+    it.each(["failure", "empty"])("reports a PDF %s with the resolved title, URL and reason", async (state) => {
+      if (state === "failure") vi.mocked(extractPdfText).mockRejectedValue(new Error("PDF download failed"));
+      else vi.mocked(extractPdfText).mockResolvedValue({ text: "", lastModified: null });
+      const result = await handler({ kokuji_name: number });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ found: false, source: "not_found", title: entry.title, kokuji_number: number });
+      expect(result.content[0].text).toContain("告示本文の取得に失敗しました");
+      expect(result.content[0].text).toContain(entry.pdf_url);
+      expect(result.content[0].text).toContain("原因:");
+      if (state === "failure") expect(result.content[0].text).toContain("PDF download failed");
+      expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    });
+  });
+
   it("uses the default page size when pagination inputs are omitted", async () => {
     vi.mocked(findKokujiCandidates).mockResolvedValue([createMatch()]);
     vi.mocked(extractPdfText).mockResolvedValue({ text: "文".repeat(30_001), lastModified: null });
 
     const result = await handler({ kokuji_name: "テスト告示" });
     expect(result.isError).toBeUndefined();
+    expect(result.structuredContent.found).toBe(true);
     expect(result.structuredContent.next_offset).toBeGreaterThan(1000);
     expect(result.structuredContent.next_offset).toBeLessThan(30_000);
     expect(result.content[0].text).toContain(`offset=${result.structuredContent.next_offset}`);
@@ -346,7 +476,7 @@ describe("get_kokuji ツール", () => {
     expect(result.content[0].text).toContain("get_law");
     // getLawData should NOT have been called since nothing was found
     expect(getLawData).not.toHaveBeenCalled();
-    expect(result.structuredContent).toMatchObject({ source: "not_found", title: null, amendments: null });
+    expect(result.structuredContent).toMatchObject({ found: false, source: "not_found", title: null, amendments: null });
     expect(result.structuredContent.text).toBe(result.content[0].text);
     expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
   });

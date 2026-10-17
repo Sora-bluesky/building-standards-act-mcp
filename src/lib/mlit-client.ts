@@ -3,7 +3,7 @@ import { expandKokujiAliases } from "../data/kokuji-term-aliases.js";
 import { formatArticleRef, parseArticleRefs, type ArticleRef } from "./article-ref.js";
 import { createCache } from "./cache.js";
 import { SERVER_VERSION } from "./version.js";
-import { kokujiKey, kokujiNumberFromDbEntry } from "./kokuji-number.js";
+import { kokujiKey, kokujiNumberFromDbEntry, stripKokujiCitations } from "./kokuji-number.js";
 
 const MLIT_NOTICE_URL = "https://www.mlit.go.jp/notice/";
 const EXCEL_URL_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -23,7 +23,7 @@ export interface MlitNoticeEntry {
   pdf_url: string;
 }
 
-export type KokujiMatchStage = "exact" | "partial" | "article" | "keyword";
+export type KokujiMatchStage = "exact" | "partial" | "article" | "keyword" | "number";
 
 export interface KokujiMatch {
   entry: MlitNoticeEntry;
@@ -434,7 +434,8 @@ function articleMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[
 function keywordMatches(entries: MlitNoticeEntry[], query: string): KokujiMatch[] {
   const expanded = expandKokujiAliases(query);
   const refs = parseArticleRefs(expanded);
-  const stripped = withoutRefs(expanded, refs);
+  // Exclude citation boilerplate because it matched unrelated titles.
+  const stripped = stripKokujiCitations(withoutRefs(expanded, refs));
   const runs = kanjiRuns(stripped).filter((run) => !/^[第条項号法令]+$/.test(run));
   const totalChars = stripped.match(/[\u4E00-\u9FFF]/g)?.length ?? 0;
   if (runs.length === 0) return [];
@@ -515,9 +516,14 @@ export async function findHousingKokujiByTitle(normalizedTitle: string): Promise
     && entry.document_number.includes("告示") && normalizeKokujiTitle(entry.title) === normalizedTitle);
 }
 
-export async function findKokujiByKey(key: string): Promise<MlitNoticeEntry | null> {
-  return (await getAllEntries()).find((entry) => {
+export async function findKokujiEntriesByKey(key: string): Promise<{ available: boolean; entries: MlitNoticeEntry[] }> {
+  const entries = await getAllEntries();
+  return { available: entries.length > 0, entries: entries.filter((entry) => {
     const number = kokujiNumberFromDbEntry(entry);
     return number !== null && kokujiKey(number) === key;
-  }) ?? null;
+  }) };
+}
+
+export async function findKokujiByKey(key: string): Promise<MlitNoticeEntry | null> {
+  return (await findKokujiEntriesByKey(key)).entries[0] ?? null;
 }

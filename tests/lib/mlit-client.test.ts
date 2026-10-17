@@ -371,6 +371,60 @@ describe("mlit-client", () => {
     });
   });
 
+  describe("notice number lookup", () => {
+    const title = "特別避難階段の階段室又は付室の構造方法を定める件";
+    const rows = [
+      ["Header", "", "", "", "", ""],
+      ["標準内航利用運送約款（平成十八年国土交通省告示第三百十六号）", "国土交通省告示第三百十六号", "2006-01-01", "海事局", "", "https://example.com/316.pdf"],
+      [title, "国土交通省告示第六百九十六号", "42482", "住宅局", "", "https://example.com/696.pdf"],
+    ];
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.stubGlobal("fetch", mockFetch);
+      await setupHappyPath(MOCK_NOTICE_HTML, rows);
+    });
+
+    it.each(["平成28年国土交通省告示第696号", "平成二十八年国土交通省告示第六百九十六号"])("excludes citations from keyword candidates: %s", async (query) => {
+      const { findKokujiCandidates } = await import("../../src/lib/mlit-client.js");
+      expect(await findKokujiCandidates(query)).toEqual([]);
+    });
+
+    it.each([
+      "特別避難階段 階段室 付室 構造方法",
+      "特別避難階段 平成28年国土交通省告示第696号 階段室 付室 構造方法",
+    ])("keeps title-word matching after stripping citations: %s", async (query) => {
+      const { findKokujiCandidates } = await import("../../src/lib/mlit-client.js");
+      const matches = await findKokujiCandidates(query);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({ entry: { title }, stage: "keyword", score: 1 });
+    });
+
+    it("returns all rows for a duplicated key and preserves the first-entry API", async () => {
+      await setupHappyPath(MOCK_NOTICE_HTML, [
+        ...rows,
+        ["別の告示", "平成二十八年国土交通省告示第六百九十六号", "2024-01-01", "海事局", "", "https://example.com/other.pdf"],
+        ["別の年の告示", "国土交通省告示第六百九十六号", "42847", "住宅局", "", "https://example.com/2017.pdf"],
+      ]);
+      const { findKokujiEntriesByKey, findKokujiByKey } = await import("../../src/lib/mlit-client.js");
+      const result = await findKokujiEntriesByKey("平成28:国土交通省:696");
+      expect(result.available).toBe(true);
+      expect(result.entries.map((entry) => entry.title)).toEqual([title, "別の告示"]);
+      expect(result.entries[0].date).toBe("2016-04-22");
+      expect(await findKokujiByKey("平成28:国土交通省:696")).toEqual(result.entries[0]);
+      expect(await findKokujiEntriesByKey("平成13:国土交通省:1113")).toEqual({ available: true, entries: [] });
+      expect(await findKokujiByKey("平成13:国土交通省:1113")).toBeNull();
+    });
+
+    it.each(["empty", "unavailable"])("reports an unavailable database when it is %s", async (state) => {
+      if (state === "empty") await setupHappyPath(MOCK_NOTICE_HTML, [rows[0]]);
+      else mockFetch.mockRejectedValue(new TypeError("fetch failed"));
+      const { findKokujiEntriesByKey, findKokujiByKey } = await import("../../src/lib/mlit-client.js");
+      expect(await findKokujiEntriesByKey("平成28:国土交通省:696")).toEqual({ available: false, entries: [] });
+      expect(await findKokujiByKey("平成28:国土交通省:696")).toBeNull();
+    });
+  });
+
   describe("findKokujiPdfUrl — failure cases (fresh module)", () => {
     it("returns null when notice page fetch fails (network error)", async () => {
       vi.resetModules();
