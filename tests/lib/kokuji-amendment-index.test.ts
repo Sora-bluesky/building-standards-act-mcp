@@ -12,6 +12,13 @@ import { extractPdfText } from "../../src/lib/pdf-extractor.js";
 import { fetchMlitText } from "../../src/lib/mlit-client.js";
 
 describe("generated amendment index", () => {
+  it("stores a target_titles object on every notice", () => {
+    for (const notice of Object.values(KOKUJI_AMENDMENT_INDEX.notices)) {
+      expect(notice.target_titles).toBeTypeOf("object");
+      expect(notice.target_titles).not.toBeNull();
+      expect(Array.isArray(notice.target_titles)).toBe(false);
+    }
+  });
   it.each([
     ["令和5:国土交通省:207", "平成12:建設省:1399"],
     ["令和3:国土交通省:546", "平成12:建設省:1399"],

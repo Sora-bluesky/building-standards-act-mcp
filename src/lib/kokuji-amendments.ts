@@ -11,6 +11,7 @@ export const DB_NOTICE = "※ 国交省の告示 DB には 2019 年 3 月以降�
 export const MAX_RUNTIME_PDF_READS = 5;
 export const MAX_AMENDMENT_ITEMS = 30;
 const COVERAGE = "平成30年1月1日以降に公布された告示（平成29年度分から）";
+const ARTICLE_NUMBER = "[〇一二三四五六七八九十百千0-9]+";
 const NUMBER_PATTERN = new RegExp(KOKUJI_NUMBER_PATTERN_SOURCE, "g");
 
 export interface AmendmentDocument { label: string; url: string }
@@ -45,6 +46,7 @@ export interface KokujiAmendments {
 }
 export interface ResolvedAmendmentNotice extends AmendmentNotice {
   targets: Record<string, KokujiAmendmentItem["matched_by"]>;
+  target_titles: Record<string, string>;
   title_targets: string[];
   complete: boolean;
 }
@@ -151,22 +153,25 @@ export function parseAmendmentPage(html: string): AmendmentNotice[] {
   return notices;
 }
 
-export function extractAmendedKokujiKeys(pdfText: string): string[] {
-  const text = pdfText.replace(/︵/g, "（").replace(/︶/g, "）").replace(/︑/g, "、").replace(/︒/g, "。")
+function normalizePdfText(pdfText: string): string {
+  return pdfText.replace(/︵/g, "（").replace(/︶/g, "）").replace(/︑/g, "、").replace(/︒/g, "。")
     .normalize("NFKC").replace(/\s/g, "");
+}
+
+export function extractAmendedKokujiKeys(pdfText: string): string[] {
+  const text = normalizePdfText(pdfText);
   const citations = [...text.matchAll(NUMBER_PATTERN)];
   const enumeratedTargets = new Set<number>();
   // A substitution can apply to the provisions listed below it, within one article.
-  const articleNumber = "[〇一二三四五六七八九十百千0-9]+";
-  const listHeader = new RegExp(`第${articleNumber}条(?:の${articleNumber})?次に掲げる告示の規定中「[^「」]*」を「[^「」]*」に改める。`, "g");
+  const listHeader = new RegExp(`第${ARTICLE_NUMBER}条(?:の${ARTICLE_NUMBER})?次に掲げる告示の規定中「[^「」]*」を「[^「」]*」に改める。`, "g");
   for (const header of text.matchAll(listHeader)) {
     const start = header.index + header[0].length;
     const rest = text.slice(start);
-    const boundary = rest.search(new RegExp(`第${articleNumber}条|附則`));
+    const boundary = rest.search(new RegExp(`第${ARTICLE_NUMBER}条|附則`));
     const list = boundary < 0 ? rest : rest.slice(0, boundary);
     // Require a numbered item, a titled citation and a provision/table selector.
     // Quoted references and citations in subsequent articles are not list targets.
-    const item = new RegExp(`[一二三四五六七八九十](?!${articleNumber})(?:[^()「」]|\\([^()]*\\))*?\\((${KOKUJI_NUMBER_PATTERN_SOURCE})\\)(?=別表|第|付録)`, "g");
+    const item = new RegExp(`[一二三四五六七八九十](?!${ARTICLE_NUMBER})(?:[^()「」]|\\([^()]*\\))*?\\((${KOKUJI_NUMBER_PATTERN_SOURCE})\\)(?=別表|第|付録)`, "g");
     for (const match of list.matchAll(item)) {
       enumeratedTargets.add(start + match.index + match[0].lastIndexOf(match[1]));
     }
@@ -192,6 +197,36 @@ export function extractAmendedKokujiKeys(pdfText: string): string[] {
     first = last;
   }
   return [...new Set(keys)];
+}
+
+export function extractAmendedKokujiTitles(pdfText: string, namedTitles: string[]): Record<string, string> {
+  const text = normalizePdfText(pdfText);
+  const keys = new Set(extractAmendedKokujiKeys(pdfText));
+  const titles = new Map<string, string>();
+  const conflicts = new Set<string>();
+  const collect = (pattern: RegExp, namedTitle?: string) => {
+    for (const match of text.matchAll(pattern)) {
+      const before = text.slice(0, match.index);
+      if (before.lastIndexOf("「") > before.lastIndexOf("」") || before.lastIndexOf("『") > before.lastIndexOf("』")) continue;
+      const number = parseKokujiNumber(match.groups!.number);
+      if (!number) continue;
+      const key = kokujiKey(number);
+      if (!keys.has(key) || conflicts.has(key)) continue;
+      const title = namedTitle ?? match.groups!.title;
+      if (titles.has(key) && titles.get(key) !== title) {
+        titles.delete(key);
+        conflicts.add(key);
+      } else titles.set(key, title);
+    }
+  };
+  collect(new RegExp(`\\((?<title>.+?)の一部改正\\)第${ARTICLE_NUMBER}条(?:の${ARTICLE_NUMBER})?\\k<title>\\((?<number>${KOKUJI_NUMBER_PATTERN_SOURCE})\\)の(?:一部|全部)を`, "g"));
+  for (const named of namedTitles) {
+    const title = normalizePdfText(named);
+    if (!title) continue;
+    const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    collect(new RegExp(`${escaped}\\((?<number>${KOKUJI_NUMBER_PATTERN_SOURCE})\\)の(?:一部|全部)を`, "g"), title);
+  }
+  return Object.fromEntries(titles);
 }
 
 export function targetTitlesFromName(title: string): { titles: string[]; complete: boolean } {
@@ -227,7 +262,7 @@ export async function resolveNoticeTargets(
   for (const key of notice.listed_target_keys) targets[key] = "page";
   if (indexed) {
     for (const key of indexed.target_keys) targets[key] = "pdf";
-    return { ...notice, targets, title_targets: [], complete: indexed.complete && hasCompletePdfTargets(notice, indexed.target_keys) };
+    return { ...notice, targets, target_titles: indexed.target_titles, title_targets: [], complete: indexed.complete && hasCompletePdfTargets(notice, indexed.target_keys) };
   }
   const named = targetTitlesFromName(notice.title);
   const titleTargets: string[] = [];
@@ -255,7 +290,7 @@ export async function resolveNoticeTargets(
       // Preserve page and unique title evidence when a PDF cannot be read.
     }
   }
-  return { ...notice, targets, title_targets: titleTargets, complete };
+  return { ...notice, targets, target_titles: {}, title_targets: titleTargets, complete };
 }
 
 const cache = createCache<ResolvedAmendmentNotice[]>("kokuji-amendments", 24 * 60 * 60 * 1000);
@@ -275,6 +310,40 @@ export async function getKokujiAmendmentNotices(): Promise<ResolvedAmendmentNoti
     return resolved;
   })();
   try { return await inFlight; } finally { inFlight = undefined; }
+}
+
+export interface CurrentKokujiTitle { title: string; source_number: string }
+
+export async function currentKokujiTitles(): Promise<Map<string, CurrentKokujiTitle> | null> {
+  let notices;
+  try { notices = await getKokujiAmendmentNotices(); }
+  catch { return null; }
+  if (!notices) return null;
+  const candidates = new Map<string, { title: string; source_number: string; promulgated_on: string | null }[]>();
+  for (const notice of notices) {
+    for (const [key, title] of Object.entries(notice.target_titles ?? {})) {
+      const group = candidates.get(key) ?? [];
+      group.push({ title, source_number: notice.number, promulgated_on: notice.promulgated_on });
+      candidates.set(key, group);
+    }
+  }
+  const current = new Map<string, CurrentKokujiTitle>();
+  for (const [key, group] of candidates) {
+    const latestDate = group.reduce((latest, item) => item.promulgated_on && item.promulgated_on > latest ? item.promulgated_on : latest, "");
+    const latest = group.filter((item) => item.promulgated_on === null || item.promulgated_on === latestDate);
+    if (new Set(latest.map((item) => item.title)).size !== 1) continue;
+    const source = latest.find((item) => item.promulgated_on !== null) ?? latest[0];
+    current.set(key, { title: source.title, source_number: source.source_number });
+  }
+  return current;
+}
+
+export async function findKokujiKeyByCurrentTitle(name: string): Promise<(CurrentKokujiTitle & { key: string }) | null> {
+  const current = await currentKokujiTitles();
+  if (!current) return null;
+  const normalized = normalizeKokujiTitle(name);
+  const matches = [...current].filter(([, item]) => normalizeKokujiTitle(item.title) === normalized);
+  return matches.length === 1 ? { key: matches[0][0], ...matches[0][1] } : null;
 }
 
 export function unavailableAmendments(): KokujiAmendments {

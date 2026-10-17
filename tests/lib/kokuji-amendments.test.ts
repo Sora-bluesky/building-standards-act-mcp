@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AmendmentNotice, KokujiAmendments } from "../../src/lib/kokuji-amendments.js";
 
-const index = vi.hoisted(() => ({ notices: {} as Record<string, { number: string; source_pdf: string; target_keys: string[]; complete: boolean }> }));
+const index = vi.hoisted(() => ({ notices: {} as Record<string, { number: string; source_pdf: string; target_keys: string[]; target_titles: Record<string, string>; complete: boolean }> }));
 vi.mock("../../src/data/kokuji-amendment-index.js", () => ({ KOKUJI_AMENDMENT_INDEX: index }));
 vi.mock("../../src/lib/mlit-client.js", async (original) => ({
   ...await original<typeof import("../../src/lib/mlit-client.js")>(), fetchMlitText: vi.fn(), findHousingKokujiByTitle: vi.fn(),
@@ -130,7 +130,7 @@ describe("amendment page", () => {
 
 describe("target resolution", () => {
   it("uses the index first, including an authoritative empty set", async () => {
-    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_keys: [targetKey], complete: true };
+    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: [targetKey], complete: true };
     expect(await lib.resolveNoticeTargets(notice())).toMatchObject({ targets: { [targetKey]: "pdf" }, complete: true });
     index.notices["令和5:国土交通省:207"].target_keys = [];
     expect(await lib.resolveNoticeTargets(notice({ title: "新たな構造方法を定める件" }))).toMatchObject({ targets: {}, complete: true });
@@ -138,14 +138,14 @@ describe("target resolution", () => {
     expect(findHousingKokujiByTitle).not.toHaveBeenCalled();
   });
   it.each([true, false])("merges page-only targets and checks completeness for indexed PDFs (complete=%s)", async (complete) => {
-    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_keys: [targetKey], complete };
+    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: [targetKey], complete };
     const resolved = await lib.resolveNoticeTargets(notice({ listed_target_keys: [targetKey, "平成20:国土交通省:282"] }));
     expect(resolved).toMatchObject({ targets: { [targetKey]: "pdf", "平成20:国土交通省:282": "page" }, complete: false });
     expect(extractPdfText).not.toHaveBeenCalled();
     expect(findHousingKokujiByTitle).not.toHaveBeenCalled();
   });
   it.each([[[]], [[targetKey]]])("never re-reads a known incomplete index entry with targets %j", async (target_keys) => {
-    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_keys, complete: false };
+    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys, complete: false };
     expect(await lib.resolveNoticeTargets(notice())).toMatchObject({ complete: false });
     expect(extractPdfText).not.toHaveBeenCalled();
     expect(findHousingKokujiByTitle).not.toHaveBeenCalled();
@@ -217,13 +217,13 @@ describe("target resolution", () => {
   });
   it("does not return Reiwa amendments for a Heisei notice with the same western year and number", async () => {
     vi.mocked(fetchMlitText).mockResolvedValue(page());
-    index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_keys: ["令和1:国土交通省:193"], complete: true };
+    index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: ["令和1:国土交通省:193"], complete: true };
     expect((await lib.findAmendmentsFor({ key: "平成31:国土交通省:193", title: "" })).items).toEqual([]);
     expect((await lib.findAmendmentsFor({ key: "令和1:国土交通省:193", title: "" })).items).toHaveLength(1);
   });
   it("sorts indexed matches newest first, caps at 30, and caches a resolution pass", async () => {
     vi.mocked(fetchMlitText).mockResolvedValue(page(35));
-    for (let i = 1; i <= 35; i++) index.notices[`令和5:国土交通省:${i}`] = { number: "n", source_pdf: "u", target_keys: [targetKey], complete: true };
+    for (let i = 1; i <= 35; i++) index.notices[`令和5:国土交通省:${i}`] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: [targetKey], complete: true };
     const [result, same] = await Promise.all([lib.findAmendmentsFor({ key: targetKey, title: "" }), lib.findAmendmentsFor({ key: targetKey, title: "" })]);
     expect(result).toMatchObject({ status: "ok", omitted_count: 5, unresolved_count: 0 });
     expect(result.items).toHaveLength(30);
@@ -250,7 +250,7 @@ describe("target resolution", () => {
     vi.useFakeTimers();
     try {
       vi.mocked(fetchMlitText).mockResolvedValue(page());
-      index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_keys: [], complete: true };
+      index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: [], complete: true };
       await lib.getKokujiAmendmentNotices();
       vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 1);
       await lib.getKokujiAmendmentNotices();
@@ -259,7 +259,7 @@ describe("target resolution", () => {
   });
   it("returns only the four supported output document labels", async () => {
     vi.mocked(fetchMlitText).mockResolvedValue(page().replace("<!-- #contents end -->", '<a href="/summary.pdf">概要</a><br><a href="/advice.pdf">技術的助言</a><!-- #contents end -->'));
-    index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_keys: [targetKey], complete: true };
+    index.notices["令和5:国土交通省:1"] = { number: "n", source_pdf: "u", target_titles: {}, target_keys: [targetKey], complete: true };
     const result = await lib.findAmendmentsFor({ key: targetKey, title: "" });
     expect(result.items[0].documents.map((d) => d.label)).toEqual(["新旧対照表", "技術的助言"]);
   });
@@ -289,5 +289,109 @@ describe("Japanese amendment section", () => {
     expect(text).toContain(lib.AMENDMENTS_PAGE_URL);
     expect(text).toContain("改正一覧を取得できませんでした");
     expect(text).toContain("最新の改正は官報で確認してください。");
+  });
+});
+
+
+describe("amended notice titles", () => {
+  const title = "木造の建築物の軸組の構造方法及び設置の基準を定める件";
+  const citation = "昭和五十六年建設省告示第千百号";
+  const key = "昭和56:建設省:1100";
+  it.each([false, true])("extracts the actual 976 heading (vertical=%s)", (vertical) => {
+    let text = `${title}等の一部を改正する告示(${title}の一部改正)第一条${title}(${citation})の一部を次のように改正する。次の表により`;
+    if (vertical) text = [...text.replaceAll("(", "︵").replaceAll(")", "︶")].join(" \n");
+    expect(lib.extractAmendedKokujiTitles(text, [])).toEqual({ [key]: title });
+  });
+  it("extracts a second article and an article subdivision independently", () => {
+    const text = `（${title}の一部改正）第一条${title}（${citation}）の一部を次のように改正する。`
+      + `（${entry.title}の一部改正）第二条の三${entry.title}（平成十二年建設省告示第千三百九十九号）の全部を改正する。`;
+    expect(lib.extractAmendedKokujiTitles(text, [])).toEqual({ [key]: title, [targetKey]: entry.title });
+  });
+  it("requires the heading title and article title to be identical", () => {
+    expect(lib.extractAmendedKokujiTitles(`（旧題名の一部改正）第一条${title}（${citation}）の一部を改正する。`, [])).toEqual({});
+  });
+  it("extracts only a named direct target without a heading, escaping regexp characters", () => {
+    const named = "構造[甲]+の基準を定める件";
+    const text = `${named}（${citation}）の一部を改正する。`;
+    expect(lib.extractAmendedKokujiTitles(text, [named])).toEqual({ [key]: named });
+    expect(lib.extractAmendedKokujiTitles(text, [])).toEqual({});
+    expect(lib.extractAmendedKokujiTitles(text, ["構造.*の基準を定める件"])).toEqual({});
+  });
+  it.each(["に規定する基準を適用する。", "の一部を参照する。", "」に規定する基準を適用する。"])("rejects references: %s", (relation) => {
+    const text = `（${title}の一部改正）第一条${title}（${citation}）${relation}`;
+    expect(lib.extractAmendedKokujiTitles(text, [title])).toEqual({});
+  });
+  it("rejects a quoted amendment clause as title evidence", () => {
+    const text = `「${title}（${citation}）の一部を改正する。」を引用する。`;
+    expect(lib.extractAmendedKokujiTitles(text, [title])).toEqual({});
+  });
+  it("does not lose titles containing parentheses", () => {
+    const named = "構造方法（試験方法を含む。）を定める件";
+    const text = `（${named}の一部改正）第2条${named}（${citation}）の一部を改正する。`;
+    expect(lib.extractAmendedKokujiTitles(text, [])).toEqual({ [key]: named.normalize("NFKC") });
+  });
+  it("drops a key with conflicting titles in the same PDF", () => {
+    const old = "軸組及び当該軸組に係る倍率の数値";
+    const text = `（${title}の一部改正）第一条${title}（${citation}）の一部を改正する。`
+      + `${old}（${citation}）の一部を改正する。`;
+    expect(lib.extractAmendedKokujiTitles(text, [old])).toEqual({});
+    expect(lib.extractAmendedKokujiTitles(text + `${title}（${citation}）の一部を改正する。`, [old, title])).toEqual({});
+  });
+});
+
+describe("current notice titles", () => {
+  const key = "昭和56:建設省:1100";
+  const title = "木造の建築物の軸組の構造方法及び設置の基準を定める件";
+  function titlesPage(items: { titles: Record<string, string>; date: string | null }[]) {
+    const html = items.map((item, i) => {
+      index.notices[`令和5:国土交通省:${i + 1}`] = { number: "n", source_pdf: "u", target_keys: Object.keys(item.titles), target_titles: item.titles, complete: true };
+      return `<h4>令和5年度</h4>${item.date ? `【${item.date}公布】<br>` : ""}○基準等の一部を改正する告示（令和5年国土交通省告示第${i + 1}号）<br>`;
+    }).join("");
+    vi.mocked(fetchMlitText).mockResolvedValue(`<!-- #contents start -->${html}<!-- #contents end -->`);
+  }
+  it("uses the latest promulgated title, independent of page order and enforcement dates", async () => {
+    for (const item of lib.parseAmendmentPage(fixture)) index.notices[item.key!] = { number: item.number, source_pdf: "u", target_keys: [], target_titles: {}, complete: false };
+    for (const amendment of ["令和6:国土交通省:447", "令和7:国土交通省:215", "令和7:国土交通省:976"]) {
+      index.notices[amendment].target_keys = [key];
+      index.notices[amendment].target_titles = { [key]: amendment.startsWith("令和6") ? "旧題名" : title };
+    }
+    vi.mocked(fetchMlitText).mockResolvedValue(fixture);
+    const current = { title, source_number: "令和7年国土交通省告示第976号" };
+    expect((await lib.currentKokujiTitles())?.get(key)).toEqual(current);
+    expect(await lib.findKokujiKeyByCurrentTitle(` ${title.replace("木造", "木 造")} `)).toEqual({ key, ...current });
+    expect(await lib.findKokujiKeyByCurrentTitle("旧題名")).toBeNull();
+    expect(await lib.findKokujiKeyByCurrentTitle("未知の題名")).toBeNull();
+    expect(fetchMlitText).toHaveBeenCalledTimes(1);
+    expect(extractPdfText).not.toHaveBeenCalled();
+  });
+  it("rejects a normalized title shared by two keys", async () => {
+    titlesPage([{ titles: { [key]: title, [targetKey]: title.replace(/を定める件$/, "") }, date: "令和5年3月1日" }]);
+    expect(await lib.findKokujiKeyByCurrentTitle(title)).toBeNull();
+  });
+  it.each(["tie", "undated-first", "undated-last"])("rejects conflicting titles with %s", async (kind) => {
+    const old = { titles: { [key]: "旧題名" }, date: kind === "undated-first" ? null : "令和5年3月1日" };
+    const current = { titles: { [key]: title }, date: kind === "undated-last" ? null : "令和5年3月1日" };
+    titlesPage([old, current]);
+    expect((await lib.currentKokujiTitles())?.has(key)).toBe(false);
+    expect(await lib.findKokujiKeyByCurrentTitle(title)).toBeNull();
+  });
+  it("resolves a latest dated title even when older dates conflict", async () => {
+    titlesPage([{ titles: { [key]: "旧題名A" }, date: "令和5年3月1日" }, { titles: { [key]: "旧題名B" }, date: "令和5年3月1日" }, { titles: { [key]: title }, date: "令和5年3月2日" }]);
+    expect((await lib.currentKokujiTitles())?.get(key)?.title).toBe(title);
+  });
+  it("keeps agreeing titles at tied or unknown dates", async () => {
+    titlesPage([{ titles: { [key]: title }, date: null }, { titles: { [key]: title }, date: "令和5年3月1日" }, { titles: { [key]: title }, date: "令和5年3月1日" }]);
+    expect((await lib.currentKokujiTitles())?.get(key)?.title).toBe(title);
+  });
+  it("exposes indexed titles but never derives them from runtime PDFs", async () => {
+    index.notices["令和5:国土交通省:207"] = { number: "n", source_pdf: "u", target_keys: [key], target_titles: { [key]: title }, complete: true };
+    expect((await lib.resolveNoticeTargets(notice())).target_titles).toEqual({ [key]: title });
+    vi.mocked(extractPdfText).mockResolvedValue({ text: targetText, lastModified: null });
+    expect((await lib.resolveNoticeTargets(notice({ key: "令和5:国土交通省:999" }))).target_titles).toEqual({});
+  });
+  it.each([false, true])("returns no title when the amendment page is unavailable (rejected=%s)", async (rejected) => {
+    if (rejected) vi.mocked(fetchMlitText).mockRejectedValue(new Error("offline"));
+    expect(await lib.currentKokujiTitles()).toBeNull();
+    expect(await lib.findKokujiKeyByCurrentTitle(title)).toBeNull();
   });
 });
