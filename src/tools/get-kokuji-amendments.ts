@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { findKokujiByKey, findKokujiCandidates } from "../lib/mlit-client.js";
 import { formatKokujiNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber } from "../lib/kokuji-number.js";
-import { findAmendmentsFor, formatAmendmentsSection, unavailableAmendments } from "../lib/kokuji-amendments.js";
+import { findKokujiKeyByCurrentTitle, findAmendmentsFor, formatAmendmentsSection, unavailableAmendments } from "../lib/kokuji-amendments.js";
 import { kokujiAmendmentsSchema } from "../lib/kokuji-amendment-schema.js";
 import { TOOL_ANNOTATIONS, wrapToolHandler } from "../lib/tool-helpers.js";
 
@@ -30,8 +30,9 @@ export function registerGetKokujiAmendmentsTool(server: McpServer): void {
     }
     const parsed = kokuji_number === undefined ? null : parseKokujiNumber(kokuji_number);
     if (kokuji_number !== undefined && !parsed) return validation("告示番号を確認できませんでした。年・発出省・番号を含めて指定してください（例: 平12建告1399）。");
+    const current = kokuji_name === undefined ? null : await findKokujiKeyByCurrentTitle(kokuji_name).catch(() => null);
     const entry = parsed ? await findKokujiByKey(kokujiKey(parsed))
-      : (await findKokujiCandidates(kokuji_name!, 1))[0]?.entry ?? null;
+      : (current ? await findKokujiByKey(current.key) : null) ?? (await findKokujiCandidates(kokuji_name!, 1))[0]?.entry ?? null;
     if (!entry && !parsed) return validation(`該当する告示を確認できませんでした: ${kokuji_name}`);
     const number = parsed ?? (entry ? kokujiNumberFromDbEntry(entry) : null);
     const sourceNumber = entry?.document_number ?? kokuji_number;

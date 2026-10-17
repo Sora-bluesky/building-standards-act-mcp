@@ -22,7 +22,7 @@ vi.mock("../../src/lib/pdf-extractor.js", () => ({
   extractTextFromPdf: vi.fn(),
 }));
 vi.mock("../../src/lib/kokuji-amendments.js", async (original) => ({
-  ...await original<typeof import("../../src/lib/kokuji-amendments.js")>(), findAmendmentsFor: vi.fn(),
+  ...await original<typeof import("../../src/lib/kokuji-amendments.js")>(), findAmendmentsFor: vi.fn(), currentKokujiTitles: vi.fn(), findKokujiKeyByCurrentTitle: vi.fn(),
 }));
 
 import { registerGetKokujiTool } from "../../src/tools/get-kokuji.js";
@@ -37,7 +37,7 @@ import {
 import { extractPdfText } from "../../src/lib/pdf-extractor.js";
 import { KokujiRegistry } from "../../src/lib/kokuji-registry.js";
 import type { KokujiPreset } from "../../src/lib/types.js";
-import { DB_NOTICE, findAmendmentsFor, unavailableAmendments } from "../../src/lib/kokuji-amendments.js";
+import { DB_NOTICE, findAmendmentsFor, currentKokujiTitles, findKokujiKeyByCurrentTitle, unavailableAmendments } from "../../src/lib/kokuji-amendments.js";
 
 // Capture the handler registered by the tool
 let handler: Function;
@@ -74,6 +74,8 @@ describe("get_kokuji ツール", () => {
     vi.mocked(findKokujiEntriesByKey).mockReset().mockResolvedValue({ available: true, entries: [] });
     vi.mocked(extractPdfText).mockReset();
     vi.mocked(findAmendmentsFor).mockReset().mockResolvedValue({ ...unavailableAmendments(), status: "ok" });
+    vi.mocked(currentKokujiTitles).mockReset().mockResolvedValue(new Map());
+    vi.mocked(findKokujiKeyByCurrentTitle).mockReset().mockResolvedValue(null);
     registerGetKokujiTool(mockServer as any);
   });
 
@@ -637,5 +639,77 @@ describe("get_kokuji ツール", () => {
     expect(result.content[0].text.length + JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(50_000);
     expect(result.structuredContent.text).toBe(result.content[0].text);
     expect(result.structuredContent.next_offset).toBeLessThan(48_000);
+  });
+});
+
+
+describe("current notice title", () => {
+  const key = "昭和56:建設省:1100";
+  const title = "木造の建築物の軸組の構造方法及び設置の基準を定める件";
+  const oldTitle = "建築基準法施行令第四十六条第四項表一（一）項から（七）項までに掲げる軸組と同等以上の耐力を有する軸組及び当該軸組に係る倍率の数値";
+  const source_number = "令和7年国土交通省告示第976号";
+  const entry = { title: oldTitle, document_number: "建設省告示第千百号", date: "1981-06-01", organization: "住宅局", pdf_url: "https://www.mlit.go.jp/1100.pdf" };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(findKokujiCandidates).mockReset().mockResolvedValue([]);
+    vi.mocked(findKokujiEntriesByKey).mockReset().mockResolvedValue({ available: true, entries: [entry] });
+    vi.mocked(extractPdfText).mockReset().mockResolvedValue({ text: "本文".repeat(50_000), lastModified: null });
+    vi.mocked(searchLaws).mockReset().mockResolvedValue({ count: 0, laws: [] });
+    vi.mocked(searchMlitNotices).mockReset().mockResolvedValue([]);
+    vi.mocked(findKokujiKeyByCurrentTitle).mockReset().mockResolvedValue({ key, title, source_number });
+    vi.mocked(currentKokujiTitles).mockReset().mockResolvedValue(new Map([[key, { title, source_number }]]));
+    vi.mocked(findAmendmentsFor).mockReset().mockResolvedValue({ ...unavailableAmendments(), status: "ok", items: [{ number: source_number, title: "軸組等の一部を改正する告示", promulgated_on: "2025-10-28", effective_on: "2025-10-28", effective_note: null, documents: [], matched_by: "pdf" }] });
+    registerGetKokujiTool(mockServer as any);
+  });
+  afterEach(() => vi.restoreAllMocks());
+  it.each([title, "昭和56年建設省告示第1100号"])("returns the renamed 1100 notice for %s", async (query) => {
+    const result = await handler({ kokuji_name: query, max_chars: 48_000 });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ found: true, source: "mlit_db", kokuji_number: "昭和56年建設省告示第1100号", title: oldTitle, current_title: title, db_notice: DB_NOTICE });
+    expect(result.content[0].text).toContain(`現在の題名: ${title}`);
+    expect(result.content[0].text).toContain(`※ 国交省 DB には改正前の題名で収録されています。現在の題名は ${source_number} の本文によります。`);
+    expect(result.content[0].text).toContain(DB_NOTICE);
+    expect(result.content[0].text).toContain(`- ${source_number}`);
+    expect(result.content[0].text.length + JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(50_000);
+    expect(z.object(mockServer.registerTool.mock.calls[0][1].outputSchema).safeParse(result.structuredContent).success).toBe(true);
+    expect(extractPdfText).toHaveBeenCalledExactlyOnceWith(entry.pdf_url);
+    expect(findKokujiCandidates).not.toHaveBeenCalled();
+    if (query === title) expect(currentKokujiTitles).not.toHaveBeenCalled();
+  });
+  it.each(["関係のない告示", "DBにも改正一覧にもない題名"])("does not return a notice for %s", async (query) => {
+    vi.mocked(findKokujiKeyByCurrentTitle).mockResolvedValue(null);
+    const result = await handler({ kokuji_name: query });
+    expect(result.structuredContent).toMatchObject({ found: false, title: null, current_title: null, kokuji_number: null });
+    expect(result.content[0].text).not.toContain("【告示】");
+    expect(findKokujiEntriesByKey).not.toHaveBeenCalled();
+    expect(extractPdfText).not.toHaveBeenCalled();
+  });
+  it.each(["unavailable", "db-unavailable", "missing", "unchanged", "rejected"])("preserves title search when resolution is %s", async (reason) => {
+    if (reason === "unavailable") vi.mocked(findKokujiKeyByCurrentTitle).mockResolvedValue(null);
+    if (reason === "db-unavailable") vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: false, entries: [] });
+    if (reason === "missing") vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [] });
+    if (reason === "unchanged") vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [{ ...entry, title }] });
+    if (reason === "rejected") vi.mocked(findKokujiKeyByCurrentTitle).mockRejectedValue(new Error("offline"));
+    const result = await handler({ kokuji_name: title });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ found: false, title: null, current_title: null });
+    expect(findKokujiCandidates).toHaveBeenCalledWith(title, 1);
+    expect(extractPdfText).not.toHaveBeenCalled();
+  });
+  it("keeps the existing title path for an unchanged DB title", async () => {
+    const unchanged = { ...entry, title };
+    vi.mocked(findKokujiEntriesByKey).mockResolvedValue({ available: true, entries: [unchanged] });
+    vi.mocked(findKokujiCandidates).mockResolvedValue([{ entry: unchanged, stage: "exact", matched: [title], score: 1 }]);
+    const result = await handler({ kokuji_name: title });
+    expect(result.structuredContent).toMatchObject({ found: true, title, current_title: null });
+    expect(result.content[0].text).toContain(`【検索結果】${title}`);
+    expect(findKokujiCandidates).toHaveBeenCalledWith(title, 1);
+  });
+  it.each([false, true])("keeps number lookup available without a renamed title (rejected=%s)", async (rejected) => {
+    if (rejected) vi.mocked(currentKokujiTitles).mockRejectedValue(new Error("offline"));
+    else vi.mocked(currentKokujiTitles).mockResolvedValue(new Map([[key, { title: oldTitle, source_number }]]));
+    const result = await handler({ kokuji_name: "昭和56年建設省告示第1100号" });
+    expect(result.structuredContent).toMatchObject({ found: true, title: oldTitle, current_title: null });
+    expect(result.content[0].text).not.toContain("現在の題名:");
   });
 });

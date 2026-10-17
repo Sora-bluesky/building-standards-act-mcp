@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.2] - 2026-10-17
+
+### Fixed
+
+- `get_kokuji` finds renamed notices by their current title. The MLIT DB keeps housing-bureau notices under their pre-2019 titles, so `木造の建築物の軸組の構造方法及び設置の基準を定める件` (Showa 56 MOC Notice 1100) returned `found: false`. The amendment index now records the title each amendment PDF cites for the notices it amends directly; the title cited by the latest amendment is the current title. A query that equals exactly one current title, different from the DB title, returns that notice with the DB-version notice and amendment list as before. Unrelated titles still return `found: false`.
+- Responses add `current_title` and a line naming the amendment that uses it, also for number input. `get_kokuji_amendments` accepts the current title.
+- The regenerated index keeps `target_keys` and `complete` unchanged for all 158 notices and adds 358 title citations, 20 of which show a rename.
+
 ## [1.11.1] - 2026-10-17
 
 ### Fixed

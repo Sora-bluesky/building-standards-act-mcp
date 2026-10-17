@@ -5,9 +5,9 @@ import { KokujiRegistry } from "../lib/kokuji-registry.js";
 import { findKokujiCandidates, findKokujiEntriesByKey, normalizeKokujiTitle, searchMlitNotices, type KokujiMatch } from "../lib/mlit-client.js";
 import { extractPdfText, type PdfTextResult } from "../lib/pdf-extractor.js";
 import { extractLatestAmendment } from "../lib/kokuji-amendment.js";
-import { DB_NOTICE, findAmendmentsFor, formatAmendmentsSection, unavailableAmendments, type KokujiAmendments } from "../lib/kokuji-amendments.js";
+import { DB_NOTICE, currentKokujiTitles, findKokujiKeyByCurrentTitle, findAmendmentsFor, formatAmendmentsSection, unavailableAmendments, type CurrentKokujiTitle, type KokujiAmendments } from "../lib/kokuji-amendments.js";
 import { kokujiAmendmentsSchema } from "../lib/kokuji-amendment-schema.js";
-import { formatKokujiNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber } from "../lib/kokuji-number.js";
+import { formatKokujiNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber, type KokujiNumber } from "../lib/kokuji-number.js";
 import { searchLaws, getLawData } from "../lib/egov-client.js";
 import { parseFullLaw } from "../lib/egov-parser.js";
 import {
@@ -45,6 +45,7 @@ const outputSchema = {
   text: z.string(),
   found: z.boolean(),
   title: z.string().nullable(),
+  current_title: z.string().nullable(),
   document_number: z.string().nullable(),
   kokuji_number: z.string().nullable(),
   source: z.enum(["mlit_db", "mlit_pdf", "egov", "not_found"]),
@@ -64,14 +65,14 @@ async function mlitMetadata(match: KokujiMatch): Promise<KokujiMetadata> {
     try { amendments = await findAmendmentsFor({ key: number ? kokujiKey(number) : null, title: entry.title }); }
     catch { amendments = unavailableAmendments(); }
   }
-  return { title: entry.title, document_number: entry.document_number,
+  return { title: entry.title, current_title: null, document_number: entry.document_number,
     kokuji_number: number ? (parseKokujiNumber(entry.document_number) ? entry.document_number.normalize("NFKC") : formatKokujiNumber(number)) : null, source: "mlit_db",
     housing_bureau: housing, db_notice: housing ? DB_NOTICE : null, amendments };
 }
 
 function fallbackMetadata(title: string | null, documentNumber: string | null, source: KokujiMetadata["source"]): KokujiMetadata {
   const number = documentNumber ? parseKokujiNumber(documentNumber) : null;
-  return { title, document_number: documentNumber, kokuji_number: number ? documentNumber : null,
+  return { title, current_title: null, document_number: documentNumber, kokuji_number: number ? documentNumber : null,
     source, housing_bureau: false, db_notice: null, amendments: null };
 }
 
@@ -199,10 +200,9 @@ export function registerGetKokujiTool(server: McpServer): void {
         }
         return result;
       };
-      const parsed = parseKokujiNumber(kokuji_name);
-      if (parsed) {
+      const numberResult = async (parsed: KokujiNumber, lookup?: Awaited<ReturnType<typeof findKokujiEntriesByKey>>, resolvedTitle?: CurrentKokujiTitle) => {
         const number = formatKokujiNumber(parsed);
-        const { available, entries } = await findKokujiEntriesByKey(kokujiKey(parsed));
+        const { available, entries } = lookup ?? await findKokujiEntriesByKey(kokujiKey(parsed));
         const notFound = { ...fallbackMetadata(null, null, "not_found"), kokuji_number: number };
         if (!available) {
           return textResult(`国交省の告示 DB を取得できませんでした。時間をおいて再度お試しください。\n告示番号: ${number}`, notFound);
@@ -233,8 +233,14 @@ export function registerGetKokujiTool(server: McpServer): void {
         }
         const match: KokujiMatch = { entry, stage: "number", matched: [number], score: 1 };
         const metadata = await mlitMetadata(match);
+        const current = resolvedTitle ?? (await currentKokujiTitles().catch(() => null))?.get(kokujiKey(parsed));
+        if (current && normalizeKokujiTitle(current.title) !== normalizeKokujiTitle(entry.title)) metadata.current_title = current.title;
         return textResult([
           `【告示】${entry.title}`,
+          ...(metadata.current_title && current ? [
+            `現在の題名: ${metadata.current_title}`,
+            `※ 国交省 DB には改正前の題名で収録されています。現在の題名は ${current.source_number} の本文によります。`,
+          ] : []),
           `法令番号: ${entry.document_number}`,
           `告示番号: ${metadata.kokuji_number}`,
           "",
@@ -245,6 +251,17 @@ export function registerGetKokujiTool(server: McpServer): void {
           "出典: 国土交通省 告示・通達データベース",
           `URL: ${entry.pdf_url}`,
         ].join("\n"), metadata);
+      };
+      const parsed = parseKokujiNumber(kokuji_name);
+      if (parsed) return numberResult(parsed);
+      const current = await findKokujiKeyByCurrentTitle(kokuji_name).catch(() => null);
+      if (current) {
+        const lookup = await findKokujiEntriesByKey(current.key);
+        const entry = lookup.entries[0];
+        const number = entry ? kokujiNumberFromDbEntry(entry) : null;
+        if (lookup.available && number && normalizeKokujiTitle(entry.title) !== normalizeKokujiTitle(current.title)) {
+          return numberResult(number, lookup, current);
+        }
       }
 
       // Step 1: Check preset registry for known kokuji
