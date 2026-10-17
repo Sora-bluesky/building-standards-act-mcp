@@ -324,13 +324,39 @@ describe("get_laws_batch tool", () => {
     expect(result.structuredContent).toEqual(response);
   });
 
-  it("registers the new batch defaults and rejects per-item limits above 30,000", () => {
+  it("registers the batch defaults and validates both upper bounds", () => {
     const config = mockServer.registerTool.mock.calls[0][1] as { inputSchema: z.ZodRawShape };
     const schema = z.object(config.inputSchema);
     const requests = [{ law_name: "建築基準法", article_number: "20" }];
     expect(schema.parse({ requests })).toMatchObject({ max_chars_per_item: 8_000, max_total_chars: 40_000 });
     expect(schema.safeParse({ requests, max_chars_per_item: 30_000 }).success).toBe(true);
     expect(schema.safeParse({ requests, max_chars_per_item: 30_001 }).success).toBe(false);
+    expect(schema.safeParse({ requests, max_total_chars: 100_000 }).success).toBe(true);
+    expect(schema.safeParse({ requests, max_total_chars: 150_000 }).success).toBe(false);
+    expect(schema.safeParse({ requests, max_total_chars: 100_001 }).success).toBe(false);
+  });
+
+  it("keeps many large items within the 100,000-character serialized response limit", async () => {
+    vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+    vi.mocked(getLawArticle).mockResolvedValue(MOCK_LAW_DATA as any);
+    vi.mocked(parseArticle).mockReturnValue({ ...MOCK_ARTICLE, text: '"\n'.repeat(20_000) });
+    const config = mockServer.registerTool.mock.calls[0][1] as { inputSchema: z.ZodRawShape };
+    const params = z.object(config.inputSchema).parse({
+      requests: Array.from({ length: 20 }, (_, i) => ({ law_name: "建築基準法", article_number: `${i + 1}` })),
+      max_chars_per_item: 30_000,
+      max_total_chars: 100_000,
+    });
+
+    const result = await handler(params);
+    const response: BatchFetchResult = JSON.parse(result.content[0].text);
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual(response);
+    expect(response).toMatchObject({ total: 20, success: 20, failed: 0 });
+    expect(response.results[0].text).toBeTruthy();
+    expect(response.omitted!.length).toBeGreaterThan(0);
+    expect(response.note).toContain("max_total_chars=100000");
+    expect(result.content[0].text.length).toBeLessThanOrEqual(100_000);
+    expect(JSON.stringify(response, null, 2).length).toBeLessThanOrEqual(100_000);
   });
 
   it.each([500, 1_500])("keeps only leading whole structured paragraphs of size %i", async (size) => {

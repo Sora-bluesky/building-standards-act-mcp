@@ -18,6 +18,7 @@ import type {
 const MAX_REQUESTS = 20;
 const DEFAULT_MAX_CHARS_PER_ITEM = 8_000;
 const DEFAULT_MAX_TOTAL_CHARS = 40_000;
+const MAX_TOTAL_CHARS_LIMIT = 100_000;
 
 const schema = {
   requests: z
@@ -47,9 +48,9 @@ const schema = {
     .number()
     .int()
     .min(10_000)
-    .max(500_000)
+    .max(MAX_TOTAL_CHARS_LIMIT)
     .default(DEFAULT_MAX_TOTAL_CHARS)
-    .describe("応答全体のJSONの最大文字数（10,000〜500,000）。省略時は40,000文字。超過分の本文は省略。"),
+    .describe("応答全体のJSONの最大文字数（10,000〜100,000）。省略時は40,000文字。超過分の本文は省略。"),
 };
 
 const outputSchema = {

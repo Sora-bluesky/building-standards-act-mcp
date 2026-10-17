@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { z } from "zod";
 
 // Mock external dependencies BEFORE importing the tool module
-vi.mock("../../src/lib/egov-client.js", () => ({
+vi.mock("../../src/lib/egov-client.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../src/lib/egov-client.js")>(),
   getLawArticle: vi.fn(),
   getLawData: vi.fn(),
   getLawRevisions: vi.fn(),
@@ -239,6 +240,7 @@ describe("get_law tool", () => {
       format: "structured",
       max_chars: 1_000,
       offset: 999_999,
+      find: "存在しない語",
     });
 
     expect(result.isError).toBeUndefined();
@@ -353,6 +355,151 @@ describe("get_law tool", () => {
     expect(result.structuredContent.article.text).toHaveLength(100_000);
     expect(result.structuredContent).toMatchObject({
       total_chars: 100_500, offset: 0, next_offset: 100_000, truncated: true,
+    });
+  });
+
+  describe("find", () => {
+    beforeEach(() => {
+      vi.mocked(resolveLawId).mockResolvedValue(MOCK_RESOLVED);
+      vi.mocked(getLawArticle).mockResolvedValue({
+        law_full_text: { tag: "Law", children: [] },
+      } as any);
+    });
+
+    function mockBody(text: string) {
+      vi.mocked(parseArticle).mockReturnValue({
+        article_num: "20", article_title: "第二十条", article_caption: "（構造耐力）", text,
+      });
+    }
+
+    it("starts at the matching line and retains continuation offsets", async () => {
+      const prefix = `${"前の行😀".repeat(250)}\n`;
+      const row = `| （八） | 非常用の昇降機 | ${"あ".repeat(600)} |\n`;
+      const text = prefix + row + "後の行".repeat(500);
+      const find = "非常用の昇降機";
+      mockBody(text);
+
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find, max_chars: 1_000 });
+      const page = result.structuredContent;
+      expect(result.isError).not.toBe(true);
+      expect(page).toMatchObject({
+        find, matches: [text.indexOf(find)], matches_total: 1, offset: prefix.length,
+        total_chars: text.length, next_offset: prefix.length + row.length, truncated: true,
+      });
+      expect(page.article.text).toBe(row);
+      expect(result.content[0].text).toContain(
+        `（『${find}』の一致 1 件。offset=${prefix.length} から表示。一致位置: ${text.indexOf(find)}）\n${row}`,
+      );
+      expect(result.content[0].text).toContain(
+        `（続きがあります。find を外し offset=${page.next_offset} を指定して続きを取得してください。本文全体 ${page.total_chars} 文字）`,
+      );
+      const continued = await handler({ law_name: "建築基準法", article_number: "20", offset: page.next_offset, max_chars: 1_000 });
+      expect(continued.structuredContent.article.text).toBe(text.slice(page.next_offset, page.next_offset + 1_000));
+      const config = mockServer.registerTool.mock.calls[0][1] as { outputSchema: z.ZodRawShape };
+      expect(z.object(config.outputSchema).parse(page)).toMatchObject({ find, matches: page.matches, matches_total: 1 });
+    });
+
+    it.each(["不一致", " \t\n　"])("returns an empty non-error result for %j", async (find) => {
+      const text = "第一条の本文";
+      const article = {
+        article_num: "20", article_title: "第二十条", article_caption: "（構造耐力）", text,
+        references: [{ raw_text: "第一条", ref_type: "same_law" as const }],
+      };
+      vi.mocked(parseArticle).mockReturnValue(article);
+
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find, offset: 3 });
+      expect(result.isError).not.toBe(true);
+      expect(result.content[0].text).toBe(
+        `【建築基準法】第二十条\nこの条に『${find}』は見つかりませんでした。（本文全体 ${text.length} 文字。空白を無視し、全角・半角を区別せずに探しました）\n\n出典: e-Gov法令検索（法令番号: 昭和二十五年法律第二百一号）`,
+      );
+      expect(result.structuredContent).toMatchObject({
+        find, matches: [], matches_total: 0, total_chars: text.length,
+        offset: 3, next_offset: null, truncated: false,
+        article: { article_num: "20", article_title: "第二十条", article_caption: "（構造耐力）", text: "" },
+      });
+      expect(result.structuredContent.article).not.toHaveProperty("references");
+      const config = mockServer.registerTool.mock.calls[0][1] as { outputSchema: z.ZodRawShape };
+      expect(z.object(config.outputSchema).safeParse(result.structuredContent).success).toBe(true);
+      expect(article.text).toBe(text);
+    });
+
+    it("caps reported matches at 20 and selects matches throughout the whole body", async () => {
+      const rows = Array.from({ length: 25 }, (_, i) => `行${i}: 対象\n`);
+      const text = rows.join("");
+      const offsets = rows.map((_, i) => rows.slice(0, i).join("").length + rows[i].indexOf("対象"));
+      mockBody(text);
+      const params = { law_name: "建築基準法", article_number: "20", find: "対象" };
+
+      for (const [offset, selected] of [[0, 0], [offsets[1], 1], [offsets[1] + 1, 2], [offsets[24], 24], [text.length, 0]]) {
+        const result = await handler({ ...params, offset });
+        expect(result.structuredContent).toMatchObject({
+          find: "対象", matches: offsets.slice(0, 20), matches_total: 25,
+          offset: text.lastIndexOf("\n", offsets[selected] - 1) + 1,
+        });
+        expect(result.structuredContent.article.text).toBe(rows.slice(selected).join(""));
+      }
+    });
+
+    it("ignores whitespace and width differences while returning original UTF-16 offsets", async () => {
+      const prefix = "😀前の行\n";
+      const row = "| （１）　非　常\t用の 昇降機 |　|";
+      mockBody(prefix + row);
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find: " (1) 非常用の昇降機　" });
+      expect(result.structuredContent).toMatchObject({
+        matches: [prefix.length + 2], matches_total: 1, offset: prefix.length,
+        article: { text: row },
+      });
+    });
+
+    it.each([898, 899, 1_100])("starts at the match when its line cannot fit with the margin (prefix=%i)", async (size) => {
+      const prefix = "前の行\n";
+      const text = prefix + "あ".repeat(size) + "対象" + "い".repeat(1_100);
+      mockBody(text);
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find: "対象", max_chars: 1_000 });
+      const expected = size + 2 > 900 ? prefix.length + size : prefix.length;
+      expect(result.structuredContent.offset).toBe(expected);
+      expect(result.structuredContent.article.text).toBe(text.slice(expected, expected + 1_000));
+      expect(result.structuredContent.article.text).toContain("対象");
+    });
+
+    it("uses the original match end when ignored whitespace consumes the line budget", async () => {
+      const text = "あ".repeat(800) + "対" + "　".repeat(100) + "象" + "い".repeat(1_100);
+      mockBody(text);
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find: "対象", max_chars: 1_000 });
+      expect(result.structuredContent).toMatchObject({ matches: [800], offset: 800, next_offset: 1_800 });
+      expect(result.structuredContent.article.text).toBe(text.slice(800, 1_800));
+    });
+
+    it("retains line-boundary pagination for a match spanning a newline", async () => {
+      const text = "対" + " ".repeat(599) + "\n象" + "後".repeat(1_000);
+      mockBody(text);
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find: "対象", max_chars: 1_000 });
+      expect(result.structuredContent).toMatchObject({ matches: [0], matches_total: 1, offset: 0, next_offset: 601 });
+      expect(result.structuredContent.article.text).toBe(text.slice(0, 601));
+    });
+
+    it("filters references using the find-selected final page offset", async () => {
+      const references = ["第一条", "第二条"].map((raw_text) => ({ raw_text, ref_type: "same_law" as const }));
+      const prefix = "第一条の行\n";
+      const row = "対象は第二条による。";
+      vi.mocked(parseArticle).mockReturnValue({
+        article_num: "20", article_title: "第二十条", article_caption: "", text: prefix + row, references,
+      });
+      const result = await handler({ law_name: "建築基準法", article_number: "20", find: "対象" });
+      expect(result.structuredContent).toMatchObject({ offset: prefix.length, next_offset: null });
+      expect(result.structuredContent.article.references).toEqual([references[1]]);
+      expect(result.content[0].text).not.toContain("[同法令] 第一条");
+      expect(result.content[0].text).toContain("[同法令] 第二条");
+    });
+
+    it("validates the find length through the registered input schema", () => {
+      const config = mockServer.registerTool.mock.calls[0][1] as { inputSchema: z.ZodRawShape };
+      const schema = z.object(config.inputSchema);
+      const params = { law_name: "建築基準法", article_number: "20" };
+      expect(schema.safeParse(params).success).toBe(true);
+      expect(schema.safeParse({ ...params, find: "" }).success).toBe(false);
+      expect(schema.safeParse({ ...params, find: "あ".repeat(100) }).success).toBe(true);
+      expect(schema.safeParse({ ...params, find: "あ".repeat(101) }).success).toBe(false);
     });
   });
 

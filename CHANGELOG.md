@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-10-17
+
+### Added
+
+- `get_law` adds `find` for `format=text` to locate a paragraph or table row inside a long article without guessing offsets. The query uses the same `normalizeKeyword` as `search_articles`; both query and body then use per-character NFKC normalization and ignore all whitespace, including full-width spaces. `matches` returns the first 20 match starts in original article-body UTF-16 offsets, and `matches_total` reports the total. With `offset`, the first match at or after that offset is selected (for example, `offset=matches[1]` jumps to the second match); if none remains, selection returns to the first match. Pages start at the matching line, or at the match when the line prefix would leave too little space. No match returns the normal text `この条に『検索語』は見つかりませんでした。` with the full body length, an empty article body and match list, and no references. Structured format ignores `find`.
+
+### Fixed
+
+- `get_laws_batch` lowers the maximum `max_total_chars` from 500,000 to 100,000, matching the default `get_law` `max_chars`. Values above 100,000 now fail input validation instead of being accepted or silently clamped. A downstream agent's `max_total_chars=150000` had been accepted by the previous schema. The default remains 40,000, and the existing serialized-response truncation loop is unchanged.
+
 ## [1.9.2] - 2026-10-17
 
 ### Fixed
