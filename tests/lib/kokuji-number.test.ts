@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { formatKokujiNumber, kanjiNumeralToNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber } from "../../src/lib/kokuji-number.js";
+import { formatKokujiNumber, kanjiNumeralToNumber, kokujiKey, kokujiNumberFromDbEntry, parseKokujiNumber, stripKokujiCitations } from "../../src/lib/kokuji-number.js";
 
 describe("kokuji numbers", () => {
+  it.each([
+    ["平成28年国土交通省告示第696号", " "],
+    ["平成二十八年国土交通省告示第六百九十六号", " "],
+    ["平成２８年国土交通省告示第６９６号", " "],
+    ["平成十二年建こう設省告示第千三百九十九号", " "],
+    ["令和元年国土交通省・環きょう境省告示第二号", " "],
+    ["国土交通省・環きょう境省告示第二号", " "],
+    ["告示第６９６号", " "],
+    ["平成二十八年四月二十二日", " "],
+    ["昭和56年 令和元年五月", "   "],
+    ["平成28年4月22日国土交通省告示第696号", " "],
+    ["特別避難階段（平成28年国土交通省告示第696号）の構造方法", "特別避難階段( )の構造方法"],
+    ["平成28年国土交通省告示第696号・平成12年建設省告示第1399号", " ・ "],
+    ["特別避難階段の構造方法", "特別避難階段の構造方法"],
+  ])("strips citation boilerplate from %s", (input, expected) => {
+    expect(stripKokujiCitations(input)).toBe(expected);
+  });
+
   it.each([
     ["千三百九十九", 1399], ["二百", 200], ["千百", 1100], ["一四〇〇", 1400],
     ["１２３", 123], ["123", 123], ["元", 1], ["〇", 0], ["十", 10],

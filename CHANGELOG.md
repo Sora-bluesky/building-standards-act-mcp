@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-10-17
+
+### Fixed
+
+- `get_kokuji` resolves notice-number input directly against the MLIT DB, including Arabic digits, kanji numerals, and abbreviations such as `平28国交告696`. It asks for a title when a number belongs to multiple distinct notices and prefers PDF rows, then housing-bureau rows, for duplicate titles. Responses now include `found`.
+- Numbers absent from the MLIT DB return an explicit not-in-DB reply instead of an unrelated notice. DB unavailability and PDF failures are reported separately, without falling through to title or e-Gov search.
+- Citation boilerplate no longer counts toward title-word matching. In measurements on 5,295 live DB rows, keyword hits for 1,076 of 1,306 number-only queries (653 numbers in Arabic and kanji forms) fell to 0. Title-derived top-1 accuracy stayed at 248/259 for full segments and 242/259 with a middle segment dropped.
+
 ## [1.11.0] - 2026-10-17
 
 ### Added

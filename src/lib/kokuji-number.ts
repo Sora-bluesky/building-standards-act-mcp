@@ -16,6 +16,13 @@ const ISSUER_PATTERN = `(?:${ISSUER_COMPONENT})(?:・(?:${ISSUER_COMPONENT}))*`;
 // Keep citation boundaries identical for page parsing, PDFs and number lookups.
 export const KOKUJI_NUMBER_PATTERN_SOURCE = `(昭和|平成|令和)([${NUMERAL}]+)年(?:[${NUMERAL}]+月(?:[${NUMERAL}]+日)?)?(${ISSUER_PATTERN})告示第([${NUMERAL}]+)号`;
 
+export function stripKokujiCitations(text: string): string {
+  return text.normalize("NFKC")
+    .replace(new RegExp(KOKUJI_NUMBER_PATTERN_SOURCE, "g"), " ")
+    .replace(new RegExp(`(?:${ISSUER_PATTERN})?告示第[${NUMERAL}]+号`, "g"), " ")
+    .replace(new RegExp(`(?:昭和|平成|令和)[${NUMERAL}]+年(?:[${NUMERAL}]+月(?:[${NUMERAL}]+日)?)?`, "g"), " ");
+}
+
 function canonicalIssuer(text: string): string {
   return text.replace(/[ぁ-ゖ]/g, "");
 }
