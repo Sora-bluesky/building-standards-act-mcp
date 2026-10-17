@@ -12,7 +12,7 @@ npm test         # vitest run
 
 ## Architecture
 
-- **Tool pattern**: `src/tools/xxx.ts` exports `registerXxxTool(server)`, registered in `src/server.ts` (11 tools). Tools use `server.registerTool()` with `title`, read-only `annotations`, and `outputSchema` + `structuredContent` where the result is structured
+- **Tool pattern**: `src/tools/xxx.ts` exports `registerXxxTool(server)`, registered in `src/server.ts` (12 tools). Tools use `server.registerTool()` with `title`, read-only `annotations`, and `outputSchema` + `structuredContent` where the result is structured
 - **Lib pattern**: Business logic lives in `src/lib/`; tools handle only formatting + error wrapping via `wrapToolHandler`
 - **Law resolver**: `src/lib/law-resolver.ts` — abbreviation expansion + e-Gov API search for dynamic `law_id` resolution
 - **Alias map**: `src/data/law-aliases.ts` — 116 laws with `title`, `abbrev`, `group`

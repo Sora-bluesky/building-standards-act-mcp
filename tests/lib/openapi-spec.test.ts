@@ -27,10 +27,11 @@ describe("openapi-spec", () => {
     expect(paths).not.toContain("/api/tools/get_metrics");
   });
 
-  it("includes 10 public tools (11 total minus get_metrics)", async () => {
+  it("includes 11 public tools (12 total minus get_metrics)", async () => {
     const spec = await generateOpenApiSpec();
     const paths = Object.keys(spec.paths);
-    expect(paths.length).toBe(10);
+    expect(paths.length).toBe(11);
+    expect(paths).toContain("/api/tools/get_kokuji_amendments");
     expect(paths).toContain("/api/tools/search_articles");
   });
 

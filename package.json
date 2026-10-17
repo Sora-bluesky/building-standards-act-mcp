@@ -20,6 +20,7 @@
   ],
   "scripts": {
     "build": "tsc && node -e \"try{require('fs').chmodSync('dist/index.js',0o755)}catch{}\"",
+    "build:kokuji-index": "npm run build && node scripts/build-kokuji-amendment-index.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "lint": "tsc --noEmit",

@@ -5,6 +5,7 @@ import { registerGetFullLawTool } from "./tools/get-full-law.js";
 import { registerSearchLawTool } from "./tools/search-law.js";
 import { registerSearchArticlesTool } from "./tools/search-articles.js";
 import { registerGetKokujiTool } from "./tools/get-kokuji.js";
+import { registerGetKokujiAmendmentsTool } from "./tools/get-kokuji-amendments.js";
 
 import { registerCheckLawUpdatesTool } from "./tools/check-law-updates.js";
 import { registerGetLawsBatchTool } from "./tools/get-laws-batch.js";
@@ -24,8 +25,10 @@ const INSTRUCTIONS = `あなたは建築確認申請の法規照合アシスタ�
 - get_full_law: 法令全文を取得（例: 建築基準法施行令）。max_chars（1,000〜48,000、既定30,000）で区切り、続きは offset で取得
 - search_law: 法令名（タイトル）を検索する。条文本文の検索には search_articles を使う
 - search_articles: 条文本文を検索する。半角スペース区切りで AND 検索。AND・OR・NOT は演算子ではなく検索語として扱われる。全角スペースは半角に直して送る。keyword 必須、law_title で法令名・略称による絞り込みが可能。条番号は返らないので get_law で確定する
-- get_kokuji: 告示の全文を国土交通省の告示データベース(PDF)から動的に取得する。正式名称またはキーワードで指定可能（例: 耐火構造の構造方法を定める件）。max_chars（1,000〜48,000、既定30,000）で区切り、続きは offset で取得。
+- get_kokuji: 告示の全文を国土交通省の告示データベース(PDF)から動的に取得する。正式名称またはキーワードで指定可能（例: 耐火構造の構造方法を定める件）。max_chars（1,000〜48,000、既定30,000）で区切り、続きは offset で取得。content と structuredContent.text の両方に本文を含めるため、構造化情報も合わせた応答全体が約50,000文字に収まるよう本文ページを減らす。
+  ※ 国交省 DB には2019年3月以降の建築告示の改正が反映されていません。get_kokuji / get_kokuji_amendments は国交省の改正ページから一覧を示します。DB 本文を根拠にする前に新旧対照表 PDF を確認してください。
   ※ 国交省データベースに未収録の告示は取得できません。取得失敗時は類似告示を提案します
+- get_kokuji_amendments: 告示番号または告示名から改正一覧だけを軽量に取得（2018年1月1日以降公布分）。番号と名称はどちらか一つだけ指定。
 - check_law_updates: 法令の改正状況を確認する（法令名指定で単体チェック、グループ指定でバッチチェック、show_historyで改正履歴表示）
 - get_laws_batch: 複数の法令・条文を一括取得する（最大20件、e-Govから条単位取得）。max_chars_per_item（1,000〜20,000、既定8,000）と max_total_chars（10,000〜24,000、既定20,000）で応答量を制限。上限を超える指定は入力エラー。長い条（例: 建築基準法施行規則 第1条の3）は get_law で個別に取得
 - verify_citation: AIの回答に含まれる法令引用を検証する（条文存在確認・テキスト照合、最大10件）
@@ -63,6 +66,7 @@ export function createServer(): McpServer {
   registerSearchLawTool(server);
   registerSearchArticlesTool(server);
   registerGetKokujiTool(server);
+  registerGetKokujiAmendmentsTool(server);
   registerCheckLawUpdatesTool(server);
   registerGetLawsBatchTool(server);
   registerVerifyCitationTool(server);
