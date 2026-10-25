@@ -7,7 +7,7 @@ export default async function handler(
   res: VercelResponse,
 ): Promise<void> {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Content-Type, Accept, mcp-session-id, mcp-protocol-version",
@@ -15,6 +15,15 @@ export default async function handler(
 
   if (req.method === "OPTIONS") {
     res.status(204).end();
+    return;
+  }
+
+  // Stateless server: no SSE stream (GET) and no session to end (DELETE).
+  // An open GET stream is held until the function timeout and billed as
+  // provisioned memory for the whole time, so reject it at once.
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST, OPTIONS");
+    res.status(405).end();
     return;
   }
 
