@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.3] - 2026-10-26
+
+### Fixed
+
+- The Vercel endpoint `/api/mcp` answers `GET` and `DELETE` with `405 Method Not Allowed` (`Allow: POST, OPTIONS`). The server is stateless and offers no SSE stream, but a `GET` used to open one that stayed open until the 60-second function timeout. Clients that keep a `GET` stream open (seen from Cursor) used most of the Vercel free tier's provisioned memory this way. The MCP spec allows a 405 for `GET` when the server offers no SSE stream; clients then use `POST` only.
+
 ## [1.11.2] - 2026-10-17
 
 ### Fixed
